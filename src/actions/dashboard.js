@@ -628,42 +628,20 @@ export async function toggleMonthlyHistoryStatus(historyId, currentStatus) {
   if (fetchError) throw new Error(fetchError.message);
 
   const details = parseDetails(historyRecord.details);
-  const oneTimeDetails = details.filter(isOneTimeHistoryDetail);
   const installmentDetails = details.filter(isInstallmentHistoryDetail);
 
   const updatedDetails = details.map((detail) => {
-    if (isOneTimeHistoryDetail(detail)) {
-      return { ...detail, status: newStatus, includeInTotal: newStatus !== 'paid' };
-    }
+    if (isOneTimeHistoryDetail(detail)) return detail;
     if (isInstallmentHistoryDetail(detail)) {
       return { ...detail, status: newStatus, includeInTotal: true };
     }
     return detail;
   });
 
-  const { data: oneTimeExpenses } = await supabase
-    .from('one_time_expenses')
-    .select('*')
-    .eq('dashboard_id', historyRecord.dashboard_id);
-
   const { data: installmentExpenses } = await supabase
     .from('installment_expenses')
     .select('*')
     .eq('dashboard_id', historyRecord.dashboard_id);
-
-  for (const detail of oneTimeDetails) {
-    const matchingExpense = detail.expenseId
-      ? (oneTimeExpenses || []).find((expense) => String(expense.id) === String(detail.expenseId))
-      : (oneTimeExpenses || []).find((expense) => detail.name === expense.name && Number(detail.amount) === Number(expense.amount));
-
-    if (!matchingExpense) continue;
-
-    const { error } = await supabase
-      .from('one_time_expenses')
-      .update({ status: newStatus })
-      .eq('id', matchingExpense.id);
-    if (error) throw new Error(error.message);
-  }
 
   for (const expense of installmentExpenses || []) {
     const relatedCount = installmentDetails.filter((detail) => {
