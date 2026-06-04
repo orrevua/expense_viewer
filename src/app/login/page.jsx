@@ -1,9 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { login } from '@/actions/auth';
+import { login, register } from '@/actions/auth';
 import { useRouter } from 'next/navigation';
-import { Lock, TrendingUp, PieChart, BarChart3, ArrowRight } from 'lucide-react';
+import { Lock, UserPlus, TrendingUp, PieChart, BarChart3, ArrowRight, Mail, User } from 'lucide-react';
 
 function FloatingShape({ className, children }) {
   return <div className={className}>{children}</div>;
@@ -59,12 +59,19 @@ function BrandGraphic() {
   );
 }
 
+const inputClass = "w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-500 focus:bg-white focus:shadow-lg focus:shadow-blue-500/10 transition-all duration-300 text-slate-800 placeholder:text-slate-400 text-sm";
+
 export default function LoginPage() {
+  const [mode, setMode] = useState('login');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState(false);
   const router = useRouter();
+
+  const isRegister = mode === 'register';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -72,7 +79,10 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const res = await login(password);
+      const res = isRegister
+        ? await register(name, email, password)
+        : await login(email, password);
+
       if (res.success) {
         router.push('/');
         router.refresh();
@@ -80,10 +90,15 @@ export default function LoginPage() {
         setError(res.error);
       }
     } catch {
-      setError('An unexpected error occurred.');
+      setError('Ocorreu um erro inesperado.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const switchMode = () => {
+    setMode(isRegister ? 'login' : 'register');
+    setError('');
   };
 
   return (
@@ -121,7 +136,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Right panel — login form */}
+      {/* Right panel — auth form */}
       <div className="flex-1 flex items-center justify-center p-6 bg-gradient-to-br from-slate-50 to-slate-100 relative overflow-hidden">
         <div className="absolute -top-24 -right-24 w-72 h-72 bg-blue-100 rounded-full blur-3xl opacity-60" />
         <div className="absolute -bottom-32 -left-32 w-80 h-80 bg-emerald-100 rounded-full blur-3xl opacity-40" />
@@ -138,29 +153,61 @@ export default function LoginPage() {
           <div className="bg-white/80 backdrop-blur-xl rounded-3xl shadow-xl shadow-slate-200/50 border border-white/60 p-8 sm:p-10">
             <div className="flex justify-center mb-6">
               <div className={`relative p-4 rounded-2xl transition-all duration-500 ${focused ? 'bg-blue-600 shadow-lg shadow-blue-500/30 scale-105' : 'bg-slate-800'}`}>
-                <Lock className="w-7 h-7 text-white" />
+                {isRegister ? <UserPlus className="w-7 h-7 text-white" /> : <Lock className="w-7 h-7 text-white" />}
                 <div className={`absolute inset-0 rounded-2xl animate-pulse-ring border-2 ${focused ? 'border-blue-400' : 'border-slate-600'}`} />
               </div>
             </div>
 
             <h1 className="text-2xl font-extrabold text-center text-slate-800 tracking-tight">
-              Acesse seu painel
+              {isRegister ? 'Crie sua conta' : 'Acesse seu painel'}
             </h1>
             <p className="text-center text-slate-500 mt-2 mb-8 text-sm">
-              Insira sua senha para continuar
+              {isRegister ? 'Preencha os dados para se cadastrar' : 'Insira seus dados para continuar'}
             </p>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {isRegister && (
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Seu nome"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => setFocused(false)}
+                    className={`${inputClass} pl-11`}
+                    required
+                  />
+                </div>
+              )}
+
               <div className="relative">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="email"
+                  placeholder="seu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onFocus={() => setFocused(true)}
+                  onBlur={() => setFocused(false)}
+                  className={`${inputClass} pl-11`}
+                  required
+                />
+              </div>
+
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
                   type="password"
-                  placeholder="Senha de acesso"
+                  placeholder={isRegister ? 'Crie uma senha (min. 6 caracteres)' : 'Sua senha'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onFocus={() => setFocused(true)}
                   onBlur={() => setFocused(false)}
-                  className="w-full px-5 py-3.5 bg-slate-50 border-2 border-slate-200 rounded-2xl outline-none focus:border-blue-500 focus:bg-white focus:shadow-lg focus:shadow-blue-500/10 transition-all duration-300 text-slate-800 placeholder:text-slate-400 text-sm"
+                  className={`${inputClass} pl-11`}
                   required
+                  minLength={isRegister ? 6 : undefined}
                 />
               </div>
 
@@ -182,12 +229,26 @@ export default function LoginPage() {
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
                   <>
-                    Entrar
+                    {isRegister ? 'Criar conta' : 'Entrar'}
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </>
                 )}
               </button>
             </form>
+
+            <div className="mt-6 text-center">
+              <button
+                type="button"
+                onClick={switchMode}
+                className="text-sm text-slate-500 hover:text-blue-600 transition-colors"
+              >
+                {isRegister ? (
+                  <>Ja tem uma conta? <span className="font-semibold text-blue-600">Entrar</span></>
+                ) : (
+                  <>Primeiro acesso? <span className="font-semibold text-blue-600">Criar conta</span></>
+                )}
+              </button>
+            </div>
           </div>
 
           <p className="text-center text-xs text-slate-400 mt-6">
