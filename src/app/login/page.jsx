@@ -144,10 +144,10 @@ export default function LoginPage() {
             </div>
 
             <h1 className="text-2xl font-extrabold text-center text-slate-800 tracking-tight">
-              Bem-vindo de volta
+              Acesse seu painel
             </h1>
             <p className="text-center text-slate-500 mt-2 mb-8 text-sm">
-              Insira sua senha para acessar o painel
+              Insira sua senha para continuar
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-5">
