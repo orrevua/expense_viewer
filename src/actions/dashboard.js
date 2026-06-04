@@ -2,6 +2,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
+import { getSessionUser } from '@/actions/auth';
 
 const monthFormatter = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' });
 
@@ -271,12 +272,16 @@ async function removeMonthlyHistoryDetail(dashboardId, monthInfo, detailName) {
 // 0. Dashboards logic
 export async function getDashboards() {
   if (!supabase) return [];
-  const { data } = await supabase.from('dashboards').select('*').order('created_at', { ascending: true });
+  const user = await getSessionUser();
+  if (!user) return [];
+  const { data } = await supabase.from('dashboards').select('*').eq('user_id', user.id).order('created_at', { ascending: true });
   return data || [];
 }
 
 export async function createDashboard(name, isDefault = false) {
-  const { data, error } = await supabase.from('dashboards').insert([{ name, is_default: isDefault }]).select().single();
+  const user = await getSessionUser();
+  if (!user) throw new Error('Not authenticated');
+  const { data, error } = await supabase.from('dashboards').insert([{ name, is_default: isDefault, user_id: user.id }]).select().single();
   if (error) throw new Error(error.message);
   revalidatePath('/');
   return data;
@@ -284,27 +289,31 @@ export async function createDashboard(name, isDefault = false) {
 
 export async function deleteDashboard(dashboardId) {
   if (!supabase) return false;
-  
-  // Clean up all related records first
+  const user = await getSessionUser();
+  if (!user) return false;
+
+  const { data: dashboard } = await supabase.from('dashboards').select('id').eq('id', dashboardId).eq('user_id', user.id).single();
+  if (!dashboard) return false;
+
   await supabase.from('installment_expenses').delete().eq('dashboard_id', dashboardId);
   await supabase.from('one_time_expenses').delete().eq('dashboard_id', dashboardId);
   await supabase.from('monthly_history').delete().eq('dashboard_id', dashboardId);
 
   const { error } = await supabase.from('dashboards').delete().eq('id', dashboardId);
   if (error) throw new Error(error.message);
-  
+
   revalidatePath('/');
   return true;
 }
 
 export async function setDefaultDashboard(dashboardId) {
   if (!supabase) return false;
+  const user = await getSessionUser();
+  if (!user) return false;
 
-  // First, unset all dashboards
-  await supabase.from('dashboards').update({ is_default: false }).neq('id', '00000000-0000-0000-0000-000000000000');
-  
-  // Set the new default
-  const { error } = await supabase.from('dashboards').update({ is_default: true }).eq('id', dashboardId);
+  await supabase.from('dashboards').update({ is_default: false }).eq('user_id', user.id);
+
+  const { error } = await supabase.from('dashboards').update({ is_default: true }).eq('id', dashboardId).eq('user_id', user.id);
   if (error) throw new Error(error.message);
 
   revalidatePath('/');
