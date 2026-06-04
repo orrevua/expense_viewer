@@ -25,7 +25,7 @@ const MONTH_OPTIONS = [
   'Jun/2027', 'Jul/2027', 'Aug/2027', 'Sep/2027', 'Oct/2027', 'Nov/2027',
 ];
 
-export default function InstallmentCard({ expense, isReadOnly }) {
+export default function InstallmentCard({ expense, isReadOnly, timeline }) {
   const [isPending, startTransition] = useTransition();
   const { t, translateMonth } = useLocale();
   const [isEditing, setIsEditing] = useState(false);
@@ -151,7 +151,7 @@ export default function InstallmentCard({ expense, isReadOnly }) {
       <div className="w-full bg-slate-100 rounded-full h-2.5 mb-2">
         <div className={`h-2.5 rounded-full ${isFullyPaid ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }} />
       </div>
-      <InstallmentTimeline expense={expense} />
+      <InstallmentTimeline expense={expense} timeline={timeline} />
       <div className="flex justify-between text-sm">
         <div className="flex gap-3">
           <span className="text-slate-500">{t('amountPerPart')} <strong className="text-slate-700">{formatCurrency(expense.installment_amount)}</strong></span>

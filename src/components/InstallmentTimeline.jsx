@@ -18,11 +18,54 @@ function getMonthsFromStart(startMonth, count) {
   return months;
 }
 
-export default function InstallmentTimeline({ expense }) {
+function getInstallmentBaseName(name) {
+  if (!name) return '';
+  const match = String(name).match(/^(.*?)\s*\(\d+\/\d+\)$/);
+  return match ? match[1] : name;
+}
+
+function findDetailForExpense(details, expense) {
+  if (!Array.isArray(details)) return null;
+  const expId = expense.id ? String(expense.id) : null;
+  if (expId) {
+    const byId = details.find(d => d.expenseId && String(d.expenseId) === expId);
+    if (byId) return byId;
+  }
+  return details.find(d =>
+    d.kind === 'installment' && getInstallmentBaseName(d.name) === expense.name
+  ) || null;
+}
+
+function parseDetails(details) {
+  if (!details) return [];
+  if (Array.isArray(details)) return details;
+  if (typeof details === 'string') {
+    try { return JSON.parse(details); } catch { return []; }
+  }
+  return [];
+}
+
+function buildStatusMap(timeline, expense) {
+  const map = {};
+  if (!timeline) return map;
+  for (const entry of timeline) {
+    const details = parseDetails(entry.details);
+    const detail = findDetailForExpense(details, expense);
+    if (detail) {
+      map[entry.month] = detail.status === 'paid';
+    }
+  }
+  return map;
+}
+
+export default function InstallmentTimeline({ expense, timeline }) {
   const { translateMonth } = useLocale();
   const months = getMonthsFromStart(expense.start_month, expense.installments);
   const now = new Date();
   const currentMonthStr = `${MONTH_ABBR[now.getMonth()]}/${now.getFullYear()}`;
+
+  const statusMap = buildStatusMap(timeline, expense);
+  const hasTimelineData = Object.keys(statusMap).length > 0;
 
   const shouldTruncate = months.length > 10;
   const visible = shouldTruncate ? [...months.slice(0, 6), null, ...months.slice(-3)] : months;
@@ -34,7 +77,9 @@ export default function InstallmentTimeline({ expense }) {
           return <div key="ellipsis" className="flex flex-col items-center px-1"><span className="text-[10px] text-slate-400 font-medium">...</span></div>;
         }
         const realIdx = shouldTruncate && idx > 6 ? months.length - (visible.length - idx) : idx;
-        const isPaid = realIdx < expense.paid_installments;
+        const isPaid = hasTimelineData
+          ? (statusMap[month] === true)
+          : (realIdx < expense.paid_installments);
         const isCurrent = month === currentMonthStr;
         const shortLabel = translateMonth(month).split('/')[0];
 
