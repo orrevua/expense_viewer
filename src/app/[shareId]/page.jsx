@@ -44,7 +44,7 @@ export default async function ViewDashboard({ params, searchParams }) {
           <LocalizedHeading k="installmentExpenses" className="text-xl font-bold text-slate-800 mb-4">Installment Expenses</LocalizedHeading>
           <div>
             {data.installmentExpenses?.map((expense, idx) => (
-              <InstallmentCard key={expense.id || idx} expense={expense} isReadOnly={true} />
+              <InstallmentCard key={expense.id || idx} expense={expense} isReadOnly={true} timeline={data.timeline} />
             ))}
           </div>
         </section>
