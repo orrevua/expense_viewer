@@ -18,7 +18,27 @@ function getMonthsFromStart(startMonth, count) {
   return months;
 }
 
-export default function InstallmentTimeline({ expense }) {
+function parseDetails(details) {
+  if (!details) return [];
+  if (Array.isArray(details)) return details;
+  if (typeof details === 'string') {
+    try { return JSON.parse(details); } catch { return []; }
+  }
+  return [];
+}
+
+function getDetailStatus(timeline, month, expense) {
+  if (!timeline || !expense.id) return null;
+  const monthEntry = timeline.find(m => m.month === month);
+  if (!monthEntry) return null;
+  const details = parseDetails(monthEntry.details);
+  const detail = details.find(d =>
+    (d.expenseId && String(d.expenseId) === String(expense.id) && d.kind === 'installment')
+  );
+  return detail ? detail.status : null;
+}
+
+export default function InstallmentTimeline({ expense, timeline }) {
   const { translateMonth } = useLocale();
   const months = getMonthsFromStart(expense.start_month, expense.installments);
   const now = new Date();
@@ -33,8 +53,8 @@ export default function InstallmentTimeline({ expense }) {
         if (month === null) {
           return <div key="ellipsis" className="flex flex-col items-center px-1"><span className="text-[10px] text-slate-400 font-medium">...</span></div>;
         }
-        const realIdx = shouldTruncate && idx > 6 ? months.length - (visible.length - idx) : idx;
-        const isPaid = realIdx < expense.paid_installments;
+        const detailStatus = getDetailStatus(timeline, month, expense);
+        const isPaid = detailStatus === 'paid';
         const isCurrent = month === currentMonthStr;
         const shortLabel = translateMonth(month).split('/')[0];
 
