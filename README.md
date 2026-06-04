@@ -1,58 +1,117 @@
-# Dashboard de Gastos Pessoais
+# Expense Viewer
 
-Um sistema de adição e visualização de gastos pessoais, como valores pontuais ou dívidas parceladas, focado num histórico mensal detalhado.
+Painel de financas pessoais para acompanhar despesas parceladas e pontuais com visualizacoes claras e controle total.
 
 ## Funcionalidades
 
-*   **Dashboard de Previsão:** Visualização imediata do total de gastos para o mês atual.
-*   **Gestão de Parcelados:** Monitoramento de dívidas de longo prazo com barras de progresso automáticas.
-*   **Histórico Mensal Expansível:** Visualização cronológica de todos os meses anteriores, permitindo expandir cada mês para ver a composição exata dos gastos (item a item).
-*   **Gastos Avulsos:** Registro de compras únicas e controle de status (pago/pendente).
-*   **Backend Serverless:** Persistência de dados segura e gratuita com Supabase.
+- **Despesas Parceladas** — cadastre compras parceladas com valor total, quantidade de parcelas e mes de inicio. Acompanhe o progresso de pagamento com timeline visual por mes
+- **Despesas Pontuais** — registre gastos unicos e marque como pago/pendente de forma independente
+- **Edicao Inline** — edite nome, valor, parcelas e mes de inicio diretamente no card da despesa, com redistribuicao automatica no historico
+- **Historico Mensal** — visualize todos os gastos organizados por mes, com status pago/pendente e detalhamento por item
+- **Grafico de Tendencia** — grafico de barras SVG mostrando a evolucao dos gastos mensais
+- **Multiplos Paineis** — crie paineis separados para organizar diferentes categorias de gastos
+- **Contas de Usuario** — registro e login com email/senha, cada usuario com seus proprios paineis
+- **Compartilhamento** — gere links de leitura protegidos por chave secreta para compartilhar com outras pessoas
+- **Bilingue** — interface em Portugues e Ingles, alternavel a qualquer momento
 
-## Tecnologias Utilizadas
+## Tecnologias
 
-*   **Framework:** [Next.js 14+ (App Router)](https://nextjs.org/)
-*   **Estilização:** [Tailwind CSS](https://tailwindcss.com/)
-*   **Banco de Dados:** [Supabase / PostgreSQL](https://supabase.com/)
-*   **ORM / Client:** Supabase JS SDK
-*   **Ícones:** [Lucide React](https://lucide.dev/)
-*   **Deploy:** [Vercel](https://vercel.com/)
+- **Next.js 14** — App Router com Server Components e Server Actions
+- **React 18** — interface reativa com useTransition para operacoes otimistas
+- **Tailwind CSS 3** — estilizacao utilitaria responsiva
+- **Supabase** — banco de dados PostgreSQL e API REST
+- **Lucide React** — icones SVG
+- **Zero dependencias extras** — graficos e visualizacoes feitos com SVG inline e CSS puro
 
-## Pré-requisitos
+## Configuracao
 
-Antes de começar, você precisará de:
-*   [Node.js](https://nodejs.org/) instalado (v18+)
-*   Uma conta no **Supabase**
-*   Uma conta na **Vercel** (para deploy)
+### 1. Instalar dependencias
 
-## Instalação e Setup
+```bash
+npm install
+```
 
-1.  **Clone o repositório:**
-    ```bash
-    git clone https://github.com/flpfrnc/expense_viewer.git
-    cd expense_viewer
-    ```
+### 2. Configurar variaveis de ambiente
 
-2.  **Instale as dependências:**
-    ```bash
-    npm install
-    # ou
-    yarn install
-    ```
+Crie um arquivo `.env.local` na raiz do projeto:
 
-3.  **Configure as Variáveis de Ambiente:**
-    Crie um arquivo `.env.local` na raiz do projeto e adicione suas chaves do Supabase:
-    ```env
-    NEXT_PUBLIC_SUPABASE_URL=sua_url_do_supabase
-    NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_chave_anon_key
-    ```
+```env
+NEXT_PUBLIC_SUPABASE_URL=sua_url_do_supabase
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_anon_key
 
-4.  **Setup do Banco de Dados:**
-    Execute o script SQL disponível em `/supabase/schema.sql` (ou no painel SQL Editor do Supabase) para criar as tabelas `gastos_parcelados`, `gastos_avulsos` e `historico_mensal`.
+SHAREABLE_UUID_KEY=share_seu_uuid_aqui
+```
 
-5.  **Inicie o servidor de desenvolvimento:**
-    ```bash
-    npm run dev
-    ```
-    Acesse [http://localhost:3000](http://localhost:3000) para ver o app.
+### 3. Criar tabelas no Supabase
+
+Execute os seguintes SQLs no **SQL Editor** do Supabase:
+
+```sql
+CREATE TABLE users (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE dashboards (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  is_default BOOLEAN DEFAULT FALSE,
+  user_id UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE installment_expenses (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  dashboard_id UUID REFERENCES dashboards(id),
+  name TEXT NOT NULL,
+  total_amount NUMERIC NOT NULL,
+  installments INTEGER NOT NULL,
+  paid_installments INTEGER DEFAULT 0,
+  installment_amount NUMERIC NOT NULL,
+  start_month TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE one_time_expenses (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  dashboard_id UUID REFERENCES dashboards(id),
+  name TEXT NOT NULL,
+  amount NUMERIC NOT NULL,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE monthly_history (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  dashboard_id UUID REFERENCES dashboards(id),
+  month TEXT NOT NULL,
+  total_amount NUMERIC DEFAULT 0,
+  details JSONB DEFAULT '[]',
+  status TEXT DEFAULT 'pending',
+  sort_date DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 4. Executar
+
+```bash
+npm run dev
+```
+
+Acesse `http://localhost:3000`, crie sua conta e comece a cadastrar suas despesas.
+
+## Estrutura do Projeto
+
+```
+src/
+├── actions/         # Server Actions (auth, dashboard CRUD)
+├── app/             # Paginas Next.js (login, painel principal, compartilhamento)
+├── components/      # Componentes React (cards, graficos, timeline, formularios)
+├── data/            # Dados de exemplo para desenvolvimento
+├── lib/             # Supabase client e utilitarios de senha
+└── utils/           # Formatacao de moeda (BRL)
+```
