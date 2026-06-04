@@ -36,8 +36,8 @@ npm install
 Crie um arquivo `.env.local` na raiz do projeto:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=sua_url_do_supabase
-NEXT_PUBLIC_SUPABASE_ANON_KEY=sua_anon_key
+SUPABASE_URL=sua_url_do_supabase
+SUPABASE_ANON_KEY=sua_anon_key
 
 SHAREABLE_UUID_KEY=share_seu_uuid_aqui
 ```
