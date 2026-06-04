@@ -60,7 +60,7 @@ export default async function Home({ searchParams }) {
           <LocalizedHeading k="installmentExpenses" className="text-xl font-bold text-slate-800 mb-4">Installment Expenses</LocalizedHeading>
           <div>
             {data.installmentExpenses?.map((expense, idx) => (
-              <InstallmentCard key={expense.id || idx} expense={expense} timeline={data.timeline} />
+              <InstallmentCard key={expense.id || idx} expense={expense} />
             ))}
             {(!data.installmentExpenses || data.installmentExpenses.length === 0) && <LocalizedParagraph k="noInstallmentExpensesYet" className="text-slate-500">No installment expenses yet.</LocalizedParagraph>}
           </div>
