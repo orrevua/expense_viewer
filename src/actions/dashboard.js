@@ -414,6 +414,87 @@ export async function addInstallmentExpense(dashboardId, expense) {
   return data;
 }
 
+// Edit Installment Expense (name, total_amount, installments, start_month)
+export async function editInstallmentExpense(expenseId, updates) {
+  if (!supabase) return null;
+
+  const { data: expense, error: fetchError } = await supabase
+    .from('installment_expenses')
+    .select('*')
+    .eq('id', expenseId)
+    .single();
+  if (fetchError) throw new Error(fetchError.message);
+
+  const newInstallments = updates.installments || expense.installments;
+  const newTotalAmount = updates.total_amount ?? expense.total_amount;
+  const newInstallmentAmount = newTotalAmount / newInstallments;
+  const newPaidInstallments = Math.min(expense.paid_installments, newInstallments);
+  const newName = updates.name || expense.name;
+  const newStartMonth = updates.start_month || expense.start_month;
+
+  // Remove old history details for this expense from all months
+  const { data: histories } = await supabase
+    .from('monthly_history')
+    .select('*')
+    .eq('dashboard_id', expense.dashboard_id);
+
+  for (const history of histories || []) {
+    const details = parseDetails(history.details);
+    const filteredDetails = details.filter((detail) => {
+      if (detail.expenseId && String(detail.expenseId) === String(expenseId)) return false;
+      if (detail.kind === 'installment' && detail.detailKey && detail.detailKey.includes(expense.name)) return false;
+      if (detail.kind === 'installment' && getInstallmentBaseName(detail.name) === expense.name) return false;
+      return true;
+    });
+
+    if (filteredDetails.length !== details.length) {
+      if (filteredDetails.length === 0) {
+        await supabase.from('monthly_history').delete().eq('id', history.id);
+      } else {
+        const totalAmount = filteredDetails.reduce((sum, item) => {
+          if (item.includeInTotal === false) return sum;
+          return sum + (Number(item.amount) || 0);
+        }, 0);
+        await supabase.from('monthly_history').update({ details: filteredDetails, total_amount: totalAmount }).eq('id', history.id);
+      }
+    }
+  }
+
+  // Update the expense row
+  const { error: updateError } = await supabase
+    .from('installment_expenses')
+    .update({
+      name: newName,
+      total_amount: newTotalAmount,
+      installments: newInstallments,
+      installment_amount: newInstallmentAmount,
+      paid_installments: newPaidInstallments,
+      start_month: newStartMonth,
+    })
+    .eq('id', expenseId);
+  if (updateError) throw new Error(updateError.message);
+
+  // Redistribute new history details
+  for (let i = 1; i <= newInstallments; i++) {
+    const targetMonth = getTargetMonthForInstallment(newStartMonth, i - 1);
+    const detail = {
+      expenseId: expense.id,
+      detailKey: `installment:${targetMonth.month}:${newName}:${i}`,
+      name: `${newName} (${i}/${newInstallments})`,
+      amount: newInstallmentAmount,
+      status: i <= newPaidInstallments ? 'paid' : 'pending',
+      includeInTotal: true,
+      kind: 'installment',
+      installmentNumber: i,
+      installmentTotal: newInstallments,
+    };
+    await upsertMonthlyHistoryDetail(expense.dashboard_id, targetMonth, detail, { status: 'pending' });
+  }
+
+  revalidatePath('/');
+  return { ...expense, name: newName, total_amount: newTotalAmount, installments: newInstallments, installment_amount: newInstallmentAmount, paid_installments: newPaidInstallments, start_month: newStartMonth };
+}
+
 // 3. Update Installment and Monthly History
 export async function updateInstallment(expenseId, newPaidAmount, currentMonth, newHistoryData, dashboardId) {
   const { error: errInstallment } = await supabase

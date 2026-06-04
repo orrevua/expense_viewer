@@ -7,6 +7,7 @@ import TopBar from '@/components/TopBar';
 import DashboardSelector from '@/components/DashboardSelector';
 import LocalizedHeading from '@/components/LocalizedHeading';
 import LocalizedParagraph from '@/components/LocalizedParagraph';
+import SpendingTrendChart from '@/components/SpendingTrendChart';
 import { getDashboardData, getDashboards } from '@/actions/dashboard';
 import { verifyAuth } from '@/actions/auth';
 import { redirect } from 'next/navigation';
@@ -50,6 +51,8 @@ export default async function Home({ searchParams }) {
         <DashboardSelector dashboards={dashboards} activeId={activeDashboardId || ''} />
 
         <Header total={data.summary?.totalCurrentMonth || 0} />
+
+        <SpendingTrendChart timeline={data.timeline} />
 
         {activeDashboardId ? <AddExpense dashboardId={activeDashboardId} /> : null}
 
