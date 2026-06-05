@@ -77,39 +77,41 @@ export default function InstallmentCard({ expense, isReadOnly, timeline }) {
     });
   };
 
+  const inputClass = "w-full px-3 py-2 bg-slate-50/80 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-xl text-sm text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 transition-all";
+
   if (isEditing) {
     return (
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-blue-200 mb-3">
+      <div className="bg-white/70 dark:bg-white/5 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-violet-200/60 dark:border-violet-500/20 mb-3">
         <div className="flex justify-between items-center mb-3">
-          <h3 className="font-semibold text-blue-700 text-sm">{t('editInstallment')}</h3>
-          <button onClick={() => setIsEditing(false)} className="p-1 text-slate-400 hover:text-slate-600"><X className="w-4 h-4" /></button>
+          <h3 className="font-semibold text-violet-700 dark:text-violet-400 text-sm">{t('editInstallment')}</h3>
+          <button onClick={() => setIsEditing(false)} className="p-1 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"><X className="w-4 h-4" /></button>
         </div>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">{t('editName')}</label>
-            <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-400" />
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('editName')}</label>
+            <input type="text" value={editName} onChange={e => setEditName(e.target.value)} className={inputClass} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">{t('editTotalAmount')}</label>
-              <input type="number" step="0.01" value={editTotal} onChange={e => setEditTotal(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-400" />
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('editTotalAmount')}</label>
+              <input type="number" step="0.01" value={editTotal} onChange={e => setEditTotal(e.target.value)} className={inputClass} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 mb-1">{t('editInstallmentsCount')}</label>
-              <input type="number" min="1" value={editInstallments} onChange={e => setEditInstallments(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm text-slate-800 outline-none focus:ring-2 focus:ring-blue-400" />
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('editInstallmentsCount')}</label>
+              <input type="number" min="1" value={editInstallments} onChange={e => setEditInstallments(e.target.value)} className={inputClass} />
             </div>
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">{t('editStartMonth')}</label>
-            <select value={editStartMonth} onChange={e => setEditStartMonth(e.target.value)} className="w-full px-3 py-1.5 border border-slate-300 rounded-lg text-sm text-slate-800 bg-white outline-none focus:ring-2 focus:ring-blue-400">
+            <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t('editStartMonth')}</label>
+            <select value={editStartMonth} onChange={e => setEditStartMonth(e.target.value)} className={inputClass + " appearance-none"}>
               {MONTH_OPTIONS.map(m => <option key={m} value={m}>{translateMonth(m)}</option>)}
             </select>
           </div>
           <div className="flex gap-2 pt-1">
-            <button disabled={isPending} onClick={handleSave} className="flex-1 flex items-center justify-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 rounded-lg disabled:opacity-50 transition-colors">
+            <button disabled={isPending} onClick={handleSave} className="flex-1 flex items-center justify-center gap-1 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white text-sm font-medium py-2.5 rounded-xl disabled:opacity-50 transition-all shadow-md shadow-violet-500/20">
               <Check className="w-4 h-4" /> {t('editSave')}
             </button>
-            <button onClick={() => setIsEditing(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium py-2 rounded-lg transition-colors">
+            <button onClick={() => setIsEditing(false)} className="flex-1 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-700 dark:text-slate-300 text-sm font-medium py-2.5 rounded-xl transition-all">
               {t('editCancel')}
             </button>
           </div>
@@ -119,48 +121,48 @@ export default function InstallmentCard({ expense, isReadOnly, timeline }) {
   }
 
   return (
-    <div className={`bg-white p-4 rounded-xl shadow-sm border border-slate-100 mb-3 transition-opacity ${isFullyPaid ? 'opacity-70' : ''}`}>
+    <div className={`bg-white/70 dark:bg-white/5 backdrop-blur-sm p-4 rounded-2xl shadow-sm border border-slate-200/60 dark:border-white/10 mb-3 transition-opacity ${isFullyPaid ? 'opacity-70' : ''}`}>
       <div className="flex justify-between items-center mb-2">
-        <h3 className={`font-semibold ${isFullyPaid && !isReadOnly ? 'text-slate-500 line-through' : 'text-slate-700'}`}>{expense.name}</h3>
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-slate-500">
+        <h3 className={`font-semibold ${isFullyPaid && !isReadOnly ? 'text-slate-500 dark:text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200'}`}>{expense.name}</h3>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
             {t('installmentsProgress', { paid: expense.paid_installments, total: expense.installments })}
           </span>
           {!isReadOnly && (
-            <button onClick={handleEdit} className="p-1 border border-slate-200 rounded-md text-slate-500 hover:bg-slate-50" title={t('editInstallment')}>
-              <Pencil className="w-4 h-4" />
+            <button onClick={handleEdit} className="p-1.5 border border-slate-200/60 dark:border-white/10 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/10 transition-all" title={t('editInstallment')}>
+              <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
           {!isReadOnly && (
-            <button onClick={handleDecrement} disabled={isPending || expense.paid_installments <= 0} className="p-1 border border-slate-200 rounded-md text-slate-600 hover:bg-slate-50 disabled:opacity-30 disabled:hover:bg-transparent" title={t('markPreviousInstallment')}>
-              <Minus className="w-4 h-4" />
+            <button onClick={handleDecrement} disabled={isPending || expense.paid_installments <= 0} className="p-1.5 border border-slate-200/60 dark:border-white/10 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/10 disabled:opacity-30 transition-all" title={t('markPreviousInstallment')}>
+              <Minus className="w-3.5 h-3.5" />
             </button>
           )}
           {!isReadOnly && (
-            <button onClick={handleIncrement} disabled={isPending || isFullyPaid} className="p-1 border border-slate-200 rounded-md text-blue-600 hover:bg-blue-50 disabled:opacity-30 disabled:hover:bg-transparent" title={t('markNextInstallment')}>
-              <Plus className="w-4 h-4" />
+            <button onClick={handleIncrement} disabled={isPending || isFullyPaid} className="p-1.5 border border-violet-200/60 dark:border-violet-500/20 rounded-lg text-violet-600 dark:text-violet-400 hover:bg-violet-50 dark:hover:bg-violet-500/10 disabled:opacity-30 transition-all" title={t('markNextInstallment')}>
+              <Plus className="w-3.5 h-3.5" />
             </button>
           )}
           {!isReadOnly && (
-            <button onClick={handleDelete} className="p-1 text-red-500 hover:bg-red-50 rounded-md" title={t('deleteInstallment')}>
-              <Trash className="w-4 h-4" />
+            <button onClick={handleDelete} className="p-1.5 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-all" title={t('deleteInstallment')}>
+              <Trash className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
-      <div className="w-full bg-slate-100 rounded-full h-2.5 mb-2">
-        <div className={`h-2.5 rounded-full ${isFullyPaid ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }} />
+      <div className="w-full bg-slate-100 dark:bg-white/10 rounded-full h-2 mb-2">
+        <div className={`h-2 rounded-full transition-all ${isFullyPaid ? 'bg-emerald-500' : 'bg-gradient-to-r from-violet-500 to-indigo-500'}`} style={{ width: `${progress}%` }} />
       </div>
       <InstallmentTimeline expense={expense} timeline={timeline} />
       <div className="flex justify-between text-sm">
         <div className="flex gap-3">
-          <span className="text-slate-500">{t('amountPerPart')} <strong className="text-slate-700">{formatCurrency(expense.installment_amount)}</strong></span>
+          <span className="text-slate-500 dark:text-slate-400">{t('amountPerPart')} <strong className="text-slate-700 dark:text-slate-200">{formatCurrency(expense.installment_amount)}</strong></span>
         </div>
-        <span className="text-slate-500">{t('totalLabel')} {formatCurrency(expense.total_amount)}</span>
+        <span className="text-slate-500 dark:text-slate-400">{t('totalLabel')} {formatCurrency(expense.total_amount)}</span>
       </div>
-      <div className="flex gap-4 mt-1.5 text-xs text-slate-400">
-        <span>{t('startMonth')} <strong>{translateMonth(expense.start_month)}</strong></span>
-        <span>{t('endMonth')} <strong>{translateMonth(endMonth)}</strong></span>
+      <div className="flex gap-4 mt-1.5 text-xs text-slate-400 dark:text-slate-500">
+        <span>{t('startMonth')} <strong className="text-slate-500 dark:text-slate-400">{translateMonth(expense.start_month)}</strong></span>
+        <span>{t('endMonth')} <strong className="text-slate-500 dark:text-slate-400">{translateMonth(endMonth)}</strong></span>
       </div>
     </div>
   );

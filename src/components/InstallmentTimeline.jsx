@@ -74,7 +74,7 @@ export default function InstallmentTimeline({ expense, timeline }) {
     <div className="flex items-end gap-1 overflow-x-auto py-1 mb-2">
       {visible.map((month, idx) => {
         if (month === null) {
-          return <div key="ellipsis" className="flex flex-col items-center px-1"><span className="text-[10px] text-slate-400 font-medium">...</span></div>;
+          return <div key="ellipsis" className="flex flex-col items-center px-1"><span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">...</span></div>;
         }
         const realIdx = shouldTruncate && idx > 6 ? months.length - (visible.length - idx) : idx;
         const isPaid = hasTimelineData
@@ -87,11 +87,11 @@ export default function InstallmentTimeline({ expense, timeline }) {
           <div key={month} className="flex flex-col items-center gap-0.5 min-w-[28px]">
             <div className={`w-3 h-3 rounded-full border-2 transition-colors ${
               isPaid ? 'bg-emerald-500 border-emerald-500' :
-              isCurrent ? 'bg-blue-100 border-blue-500' :
-              'bg-slate-100 border-slate-300'
+              isCurrent ? 'bg-violet-100 dark:bg-violet-500/30 border-violet-500' :
+              'bg-slate-100 dark:bg-white/10 border-slate-300 dark:border-slate-600'
             }`} />
             <span className={`text-[9px] leading-tight font-medium ${
-              isCurrent ? 'text-blue-600' : isPaid ? 'text-emerald-600' : 'text-slate-400'
+              isCurrent ? 'text-violet-600 dark:text-violet-400' : isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400 dark:text-slate-500'
             }`}>{shortLabel}</span>
           </div>
         );

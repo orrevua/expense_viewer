@@ -4,8 +4,18 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-800 font-sans;
+    @apply font-sans;
+    background: linear-gradient(135deg, #FDF2F8 0%, #FAF5FF 50%, #EFF6FF 100%);
+    min-height: 100vh;
   }
+  .dark body,
+  body.dark {
+    background: linear-gradient(135deg, #0f0b15 0%, #1a1025 50%, #0c1220 100%);
+  }
+}
+
+html.dark {
+  background: linear-gradient(135deg, #0f0b15 0%, #1a1025 50%, #0c1220 100%);
 }
 
 @keyframes float {

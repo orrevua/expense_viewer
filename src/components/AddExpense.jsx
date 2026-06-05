@@ -8,10 +8,9 @@ import { useLocale } from './LocaleProvider';
 export default function AddExpense({ dashboardId }) {
   const { t, translateMonth } = useLocale();
   const [isOpen, setIsOpen] = useState(false);
-  const [expenseType, setExpenseType] = useState('one-time'); // 'one-time' or 'installment'
+  const [expenseType, setExpenseType] = useState('one-time');
   const [loading, setLoading] = useState(false);
 
-  // Form State
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [installments, setInstallments] = useState('');
@@ -47,7 +46,6 @@ export default function AddExpense({ dashboardId }) {
         });
       }
 
-      // Reset & Close
       setName('');
       setAmount('');
       setInstallments('');
@@ -62,37 +60,41 @@ export default function AddExpense({ dashboardId }) {
     }
   };
 
+  const inputClass = "w-full px-4 py-2.5 bg-slate-50/80 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 dark:focus:border-violet-400 transition-all text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500";
+  const selectClass = "w-full px-4 py-2.5 bg-slate-50/80 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 dark:focus:border-violet-400 transition-all text-slate-800 dark:text-slate-100 appearance-none";
+  const labelClass = "block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5";
+
   return (
     <div className="mb-6">
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium transition-colors shadow-sm"
+          className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-md shadow-violet-500/20 hover:shadow-lg hover:shadow-violet-500/30"
         >
           <PlusCircle className="w-5 h-5" />
           {t('addNewExpense')}
         </button>
       ) : (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 relative">
-          <button 
+        <div className="bg-white/70 dark:bg-white/5 backdrop-blur-sm p-6 rounded-2xl shadow-sm border border-slate-200/60 dark:border-white/10 relative">
+          <button
             onClick={() => setIsOpen(false)}
-            className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
+            className="absolute top-4 right-4 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
-          
-          <h2 className="text-lg font-bold text-slate-800 mb-4">{t('addNewExpense')}</h2>
-          
-          <div className="flex gap-4 mb-6">
+
+          <h2 className="text-lg font-bold text-slate-800 dark:text-white mb-5">{t('addNewExpense')}</h2>
+
+          <div className="flex gap-2 mb-6">
             <button
               onClick={() => setExpenseType('one-time')}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${expenseType === 'one-time' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              className={`px-4 py-2 rounded-xl font-medium text-sm transition-all ${expenseType === 'one-time' ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 shadow-sm' : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'}`}
             >
               {t('oneTime')}
             </button>
             <button
               onClick={() => setExpenseType('installment')}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${expenseType === 'installment' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+              className={`px-4 py-2 rounded-xl font-medium text-sm transition-all ${expenseType === 'installment' ? 'bg-violet-100 dark:bg-violet-500/20 text-violet-700 dark:text-violet-300 shadow-sm' : 'bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10'}`}
             >
               {t('installment')}
             </button>
@@ -100,54 +102,54 @@ export default function AddExpense({ dashboardId }) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">{t('expenseName')}</label>
-              <input 
+              <label className={labelClass}>{t('expenseName')}</label>
+              <input
                 required
-                type="text" 
+                type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Grocery Shopping"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-slate-800"
+                className={inputClass}
               />
             </div>
-            
+
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className={labelClass}>
                 {expenseType === 'installment' ? t('totalAmount') : t('amount')}
               </label>
-              <input 
+              <input
                 required
                 type="number"
-                step="0.01" 
+                step="0.01"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder="0.00"
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-slate-800"
+                className={inputClass}
               />
             </div>
 
             {expenseType === 'installment' && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">{t('installments')}</label>
-                <input 
+                <label className={labelClass}>{t('installments')}</label>
+                <input
                   required
                   type="number"
                   min="2"
                   value={installments}
                   onChange={(e) => setInstallments(e.target.value)}
                   placeholder="e.g., 10"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-slate-800"
+                  className={inputClass}
                 />
               </div>
             )}
 
             {expenseType === 'installment' && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">{t('startMonthLabel')}</label>
-                <select 
+                <label className={labelClass}>{t('startMonthLabel')}</label>
+                <select
                   value={startMonth}
                   onChange={(e) => setStartMonth(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-slate-800 bg-white"
+                  className={selectClass}
                 >
                   <option value="Dec/2025">{translateMonth("Dec/2025")}</option>
                   <option value="Jan/2026">{translateMonth("Jan/2026")}</option>
@@ -167,11 +169,11 @@ export default function AddExpense({ dashboardId }) {
 
             {expenseType === 'one-time' && (
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">{t('status')}</label>
-                <select 
+                <label className={labelClass}>{t('status')}</label>
+                <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-slate-800 bg-white"
+                  className={selectClass}
                 >
                   <option value="pending">{t('pending')}</option>
                   <option value="paid">{t('paid')}</option>
@@ -179,10 +181,10 @@ export default function AddExpense({ dashboardId }) {
               </div>
             )}
 
-            <button 
+            <button
               disabled={loading}
-              type="submit" 
-              className="w-full bg-slate-800 hover:bg-slate-900 text-white font-medium py-2.5 rounded-lg transition-colors mt-2 disabled:opacity-50"
+              type="submit"
+              className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-medium py-3 rounded-xl transition-all mt-2 disabled:opacity-50 shadow-md shadow-violet-500/20 hover:shadow-lg"
             >
               {loading ? '...' : t('saveExpense')}
             </button>

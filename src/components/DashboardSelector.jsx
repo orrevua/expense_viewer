@@ -13,7 +13,6 @@ export default function DashboardSelector({ dashboards, activeId }) {
   const [newName, setNewName] = useState('');
   const [loading, setLoading] = useState(false);
 
-
   const handleSelect = (e) => {
     if (e.target.value === 'new') {
       setIsCreating(true);
@@ -27,7 +26,6 @@ export default function DashboardSelector({ dashboards, activeId }) {
     if (!newName.trim()) return;
     setLoading(true);
     try {
-      // If it's the first dashboard, make it default automatically
       const isFirst = dashboards.length === 0;
       const newSb = await createDashboard(newName, isFirst);
       setIsCreating(false);
@@ -44,7 +42,7 @@ export default function DashboardSelector({ dashboards, activeId }) {
     if (!activeId) return;
     const currentActive = dashboards.find(d => d.id === activeId);
     if (!currentActive) return;
-    
+
     if (currentActive.is_default) {
       alert(t('cannotDeleteDefault'));
       return;
@@ -54,8 +52,6 @@ export default function DashboardSelector({ dashboards, activeId }) {
       setLoading(true);
       try {
         await deleteDashboard(activeId);
-        
-        // Redirect to the default dashboard
         const defaultDashboard = dashboards.find(d => d.is_default) || dashboards[0];
         if (defaultDashboard) {
           router.push(`/?dashboardId=${defaultDashboard.id}`);
@@ -85,29 +81,31 @@ export default function DashboardSelector({ dashboards, activeId }) {
   const currentDashboard = dashboards.find(d => d.id === activeId);
   const isDefault = currentDashboard?.is_default;
 
+  const inputClass = "flex-1 px-4 py-2.5 bg-slate-50/80 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500";
+
   if (isCreating || dashboards.length === 0) {
     return (
       <form onSubmit={handleCreate} className="flex gap-2 mb-6">
-        <input 
+        <input
           autoFocus
-          className="flex-1 px-3 py-2 border border-slate-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+          className={inputClass}
           placeholder={t('createNew')}
           value={newName}
           onChange={e => setNewName(e.target.value)}
           required
         />
-        <button 
-          type="submit" 
+        <button
+          type="submit"
           disabled={loading}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium whitespace-nowrap disabled:opacity-50"
+          className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium whitespace-nowrap disabled:opacity-50 shadow-md shadow-violet-500/20 transition-all"
         >
           {loading ? '...' : t('create')}
         </button>
         {dashboards.length > 0 && (
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={() => setIsCreating(false)}
-            className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium whitespace-nowrap"
+            className="bg-slate-200 dark:bg-white/10 hover:bg-slate-300 dark:hover:bg-white/20 text-slate-700 dark:text-slate-300 px-4 py-2.5 rounded-xl font-medium whitespace-nowrap transition-all"
           >
             {t('cancel')}
           </button>
@@ -118,41 +116,41 @@ export default function DashboardSelector({ dashboards, activeId }) {
 
   return (
     <div className="mb-6 flex items-center gap-3">
-      <label className="text-sm font-semibold text-slate-500 uppercase tracking-wide">{t('selectDashboard')}</label>
+      <label className="text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">{t('selectDashboard')}</label>
       <div className="relative inline-block w-48">
-        <select 
-          value={activeId} 
+        <select
+          value={activeId}
           onChange={handleSelect}
-          className="block w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 px-3 pr-8 rounded-lg outline-none shadow-sm focus:ring-2 focus:ring-blue-500 font-medium"
+          className="block w-full appearance-none bg-white/80 dark:bg-white/5 backdrop-blur-sm border border-slate-200/80 dark:border-white/10 text-slate-700 dark:text-slate-200 py-2.5 px-4 pr-8 rounded-xl outline-none shadow-sm focus:ring-2 focus:ring-violet-500/40 font-medium transition-all"
         >
           {dashboards.map(db => (
             <option key={db.id} value={db.id}>{db.name} {db.is_default ? '★' : ''}</option>
           ))}
-          <option value="new" className="font-bold text-blue-600">
+          <option value="new" className="font-bold">
             {t('createNew')}
           </option>
         </select>
-        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500">
+        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-500 dark:text-slate-400">
           <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
         </div>
       </div>
-      
+
       {activeId && (
         <div className="flex items-center gap-2">
-          <button 
+          <button
             disabled={loading}
             onClick={handleSetDefault}
             title={t('setDefault')}
-            className={`p-2 rounded-lg transition-colors border ${isDefault ? 'bg-amber-100 border-amber-300 text-amber-600' : 'bg-white border-slate-200 text-slate-400 hover:text-amber-500'}`}
+            className={`p-2 rounded-xl transition-all border ${isDefault ? 'bg-amber-100 dark:bg-amber-500/20 border-amber-300 dark:border-amber-500/30 text-amber-600 dark:text-amber-400' : 'bg-white/80 dark:bg-white/5 border-slate-200/60 dark:border-white/10 text-slate-400 dark:text-slate-500 hover:text-amber-500 dark:hover:text-amber-400'}`}
           >
             <Star className={`w-4 h-4 ${isDefault ? 'fill-current' : ''}`} />
           </button>
-          
-          <button 
+
+          <button
             disabled={loading || isDefault}
             onClick={handleDelete}
             title={isDefault ? t('cannotDeleteDefault') : t('deleteExpense')}
-            className={`p-2 rounded-lg transition-colors border bg-white border-slate-200 ${isDefault ? 'opacity-50 cursor-not-allowed text-slate-300' : 'text-slate-400 hover:text-red-500 hover:border-red-200'}`}
+            className={`p-2 rounded-xl transition-all border bg-white/80 dark:bg-white/5 border-slate-200/60 dark:border-white/10 ${isDefault ? 'opacity-50 cursor-not-allowed text-slate-300 dark:text-slate-600' : 'text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:border-red-200 dark:hover:border-red-500/30'}`}
           >
             <Trash2 className="w-4 h-4" />
           </button>

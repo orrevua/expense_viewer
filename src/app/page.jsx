@@ -44,7 +44,7 @@ export default async function Home({ searchParams }) {
   const data = dashboardData || (dashboards.length === 0 ? initialData : { installmentExpenses: [], oneTimeExpenses: [], timeline: [], summary: { totalCurrentMonth: 0 } });
 
   return (
-    <main className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
+    <main className="min-h-screen p-4 md:p-8 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
         <TopBar secretKey={process.env.SHAREABLE_UUID_KEY} activeDashboardId={activeDashboardId} />
 
@@ -59,33 +59,33 @@ export default async function Home({ searchParams }) {
         <div className="lg:grid lg:grid-cols-2 lg:gap-8 space-y-6 lg:space-y-0">
           <div className="space-y-6">
             <section>
-              <LocalizedHeading k="installmentExpenses" className="text-xl font-bold text-slate-800 mb-4">Installment Expenses</LocalizedHeading>
+              <LocalizedHeading k="installmentExpenses" className="text-xl font-bold text-slate-800 dark:text-white mb-4">Installment Expenses</LocalizedHeading>
               <div>
                 {data.installmentExpenses?.map((expense, idx) => (
                   <InstallmentCard key={expense.id || idx} expense={expense} timeline={data.timeline} />
                 ))}
-                {(!data.installmentExpenses || data.installmentExpenses.length === 0) && <LocalizedParagraph k="noInstallmentExpensesYet" className="text-slate-500">No installment expenses yet.</LocalizedParagraph>}
+                {(!data.installmentExpenses || data.installmentExpenses.length === 0) && <LocalizedParagraph k="noInstallmentExpensesYet" className="text-slate-500 dark:text-slate-400">No installment expenses yet.</LocalizedParagraph>}
               </div>
             </section>
 
             <section>
-              <LocalizedHeading k="oneTimeExpenses" className="text-xl font-bold text-slate-800 mb-4">One-Time Expenses</LocalizedHeading>
+              <LocalizedHeading k="oneTimeExpenses" className="text-xl font-bold text-slate-800 dark:text-white mb-4">One-Time Expenses</LocalizedHeading>
               <div>
                 {data.oneTimeExpenses?.map((expense, idx) => (
                   <OneTimeExpense key={expense.id || idx} expense={expense} />
                 ))}
-                {(!data.oneTimeExpenses || data.oneTimeExpenses.length === 0) && <LocalizedParagraph k="noOneTimeExpensesYet" className="text-slate-500">No one-time expenses yet.</LocalizedParagraph>}
+                {(!data.oneTimeExpenses || data.oneTimeExpenses.length === 0) && <LocalizedParagraph k="noOneTimeExpensesYet" className="text-slate-500 dark:text-slate-400">No one-time expenses yet.</LocalizedParagraph>}
               </div>
             </section>
           </div>
 
           <section>
-            <LocalizedHeading k="monthlyHistory" className="text-xl font-bold text-slate-800 mb-4">Monthly History</LocalizedHeading>
+            <LocalizedHeading k="monthlyHistory" className="text-xl font-bold text-slate-800 dark:text-white mb-4">Monthly History</LocalizedHeading>
             <div>
               {data.timeline?.map((item, idx) => (
                 <HistoryAccordion key={item.id || idx} historyItem={item} />
               ))}
-              {(!data.timeline || data.timeline.length === 0) && <LocalizedParagraph k="noHistoryYet" className="text-slate-500">No history available yet.</LocalizedParagraph>}
+              {(!data.timeline || data.timeline.length === 0) && <LocalizedParagraph k="noHistoryYet" className="text-slate-500 dark:text-slate-400">No history available yet.</LocalizedParagraph>}
             </div>
           </section>
         </div>

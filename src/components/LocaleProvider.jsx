@@ -117,42 +117,36 @@ const translations = {
 
 const monthMap = {
   en: {
-    'Jan/': 'Jan/',
-    'Feb/': 'Feb/',
-    'Mar/': 'Mar/',
-    'Apr/': 'Apr/',
-    'May/': 'May/',
-    'Jun/': 'Jun/',
-    'Jul/': 'Jul/',
-    'Aug/': 'Aug/',
-    'Sep/': 'Sep/',
-    'Oct/': 'Oct/',
-    'Nov/': 'Nov/',
-    'Dec/': 'Dec/',
+    'Jan/': 'Jan/', 'Feb/': 'Feb/', 'Mar/': 'Mar/', 'Apr/': 'Apr/',
+    'May/': 'May/', 'Jun/': 'Jun/', 'Jul/': 'Jul/', 'Aug/': 'Aug/',
+    'Sep/': 'Sep/', 'Oct/': 'Oct/', 'Nov/': 'Nov/', 'Dec/': 'Dec/',
   },
   pt: {
-    'Jan/': 'Jan/',
-    'Feb/': 'Fev/',
-    'Mar/': 'Mar/',
-    'Apr/': 'Abr/',
-    'May/': 'Mai/',
-    'Jun/': 'Jun/',
-    'Jul/': 'Jul/',
-    'Aug/': 'Ago/',
-    'Sep/': 'Set/',
-    'Oct/': 'Out/',
-    'Nov/': 'Nov/',
-    'Dec/': 'Dez/',
+    'Jan/': 'Jan/', 'Feb/': 'Fev/', 'Mar/': 'Mar/', 'Apr/': 'Abr/',
+    'May/': 'Mai/', 'Jun/': 'Jun/', 'Jul/': 'Jul/', 'Aug/': 'Ago/',
+    'Sep/': 'Set/', 'Oct/': 'Out/', 'Nov/': 'Nov/', 'Dec/': 'Dez/',
   }
 };
 
 export function LocaleProvider({ children }) {
   const [lang, setLang] = useState('pt');
+  const [dark, setDark] = useState(false);
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem('lv_lang');
       if (stored) setLang(stored);
+      const storedTheme = localStorage.getItem('lv_theme');
+      if (storedTheme === 'dark') {
+        setDark(true);
+        document.documentElement.classList.add('dark');
+      } else if (!storedTheme) {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (prefersDark) {
+          setDark(true);
+          document.documentElement.classList.add('dark');
+        }
+      }
     } catch (e) {}
   }, []);
 
@@ -160,6 +154,17 @@ export function LocaleProvider({ children }) {
     const next = lang === 'en' ? 'pt' : 'en';
     setLang(next);
     try { localStorage.setItem('lv_lang', next); } catch (e) {}
+  };
+
+  const toggleDark = () => {
+    const next = !dark;
+    setDark(next);
+    if (next) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    try { localStorage.setItem('lv_theme', next ? 'dark' : 'light'); } catch (e) {}
   };
 
   const t = (key, vars = {}) => {
@@ -177,7 +182,7 @@ export function LocaleProvider({ children }) {
   };
 
   return (
-    <LocaleContext.Provider value={{ lang, toggle, t, translateMonth }}>
+    <LocaleContext.Provider value={{ lang, toggle, dark, toggleDark, t, translateMonth }}>
       {children}
     </LocaleContext.Provider>
   );
@@ -185,6 +190,6 @@ export function LocaleProvider({ children }) {
 
 export function useLocale() {
   const ctx = useContext(LocaleContext);
-  if (!ctx) return { lang: 'pt', toggle: () => {}, t: (k) => k, translateMonth: (m) => m };
+  if (!ctx) return { lang: 'pt', toggle: () => {}, dark: false, toggleDark: () => {}, t: (k) => k, translateMonth: (m) => m };
   return ctx;
 }
