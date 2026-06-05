@@ -86,14 +86,14 @@ export default function LoginPage() {
       if (res.success) {
         router.push('/');
         router.refresh();
+        return;
       } else {
         setError(res.error);
       }
     } catch {
       setError('Ocorreu um erro inesperado.');
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   const switchMode = () => {
