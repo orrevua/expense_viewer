@@ -46,7 +46,7 @@ export default async function Home({ searchParams }) {
   return (
     <main className="min-h-screen p-4 md:p-8 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
-        <TopBar secretKey={process.env.SHAREABLE_UUID_KEY} activeDashboardId={activeDashboardId} />
+        <TopBar activeDashboardId={activeDashboardId} />
 
         <DashboardSelector dashboards={dashboards} activeId={activeDashboardId || ''} />
 

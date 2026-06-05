@@ -11,17 +11,17 @@ import { notFound } from 'next/navigation';
 export default async function ViewDashboard({ params, searchParams }) {
   // Se o valor digitado na URL nao bater com a key do seu .env, da pagina 404 Nao Encontrada
   const secretKey = process.env.SHAREABLE_UUID_KEY;
-  if (params.shareId !== secretKey) {
-    notFound(); 
+  if (!secretKey || params.shareId !== secretKey) {
+    notFound();
   }
 
   const { dashboardId } = searchParams;
 
   let dashboardData;
-  
+
   if (dashboardId) {
     try {
-      dashboardData = await getDashboardData(dashboardId);
+      dashboardData = await getDashboardData(dashboardId, { skipAuthCheck: true });
     } catch (error) {
       console.error("Database not connected yet, falling back to static data.");
     }

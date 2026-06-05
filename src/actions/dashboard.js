@@ -6,6 +6,30 @@ import { getSessionUser } from '@/actions/auth';
 
 const monthFormatter = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' });
 
+async function requireUser() {
+  const user = await getSessionUser();
+  if (!user?.id) throw new Error('Not authenticated');
+  return user;
+}
+
+async function verifyDashboardOwner(dashboardId) {
+  const user = await requireUser();
+  const { data } = await supabase.from('dashboards').select('id').eq('id', dashboardId).eq('user_id', user.id).single();
+  if (!data) throw new Error('Dashboard not found');
+  return user;
+}
+
+function sanitizeString(value, maxLength = 200) {
+  if (!value || typeof value !== 'string') return '';
+  return value.trim().slice(0, maxLength);
+}
+
+function sanitizeNumber(value, min = 0, max = 999999999) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(min, Math.min(max, n));
+}
+
 function toValidDate(value) {
   const date = value ? new Date(value) : new Date();
   return Number.isNaN(date.getTime()) ? new Date() : date;
@@ -269,6 +293,13 @@ async function removeMonthlyHistoryDetail(dashboardId, monthInfo, detailName) {
   if (error) throw new Error(error.message);
 }
 
+// Share link
+export async function getSharePath() {
+  const key = process.env.SHAREABLE_UUID_KEY;
+  if (!key) return null;
+  return `/${key}`;
+}
+
 // 0. Dashboards logic
 export async function getDashboards() {
   if (!supabase) return [];
@@ -320,8 +351,11 @@ export async function setDefaultDashboard(dashboardId) {
   return true;
 }
 
-export async function getDashboardData(dashboardId) {
+export async function getDashboardData(dashboardId, { skipAuthCheck = false } = {}) {
   if (!supabase || !dashboardId) return { summary: { totalCurrentMonth: 0 }, installmentExpenses: [], oneTimeExpenses: [], timeline: [] };
+  if (!skipAuthCheck) {
+    await verifyDashboardOwner(dashboardId);
+  }
 
   const { data: installmentExpenses } = await supabase.from('installment_expenses').select('*').eq('dashboard_id', dashboardId);
   const { data: oneTimeExpenses } = await supabase.from('one_time_expenses').select('*').eq('dashboard_id', dashboardId);
@@ -355,13 +389,18 @@ export async function getDashboardData(dashboardId) {
 
 // 2. Add One-Time Expense
 export async function addOneTimeExpense(dashboardId, expense) {
+  await verifyDashboardOwner(dashboardId);
+  const safeName = sanitizeString(expense.name);
+  if (!safeName) throw new Error('Name is required');
+  const safeAmount = sanitizeNumber(expense.amount);
+  const safeStatus = expense.status === 'paid' ? 'paid' : 'pending';
   const { data, error } = await supabase
     .from('one_time_expenses')
     .insert([{
       dashboard_id: dashboardId,
-      name: expense.name,
-      amount: expense.amount,
-      status: expense.status || 'pending',
+      name: safeName,
+      amount: safeAmount,
+      status: safeStatus,
     }])
     .select('*')
     .single();
@@ -383,17 +422,24 @@ export async function addOneTimeExpense(dashboardId, expense) {
 // 4. Add Installment Expense
 export async function addInstallmentExpense(dashboardId, expense) {
   if (!supabase) return null;
+  await verifyDashboardOwner(dashboardId);
+  const safeName = sanitizeString(expense.name);
+  if (!safeName) throw new Error('Name is required');
+  const safeTotalAmount = sanitizeNumber(expense.total_amount);
+  const safeInstallments = sanitizeNumber(expense.installments, 1, 120);
+  const safeInstallmentAmount = safeTotalAmount / safeInstallments;
+  const safeStartMonth = sanitizeString(expense.start_month, 20) || 'May/2026';
 
   const { data, error } = await supabase
     .from('installment_expenses')
     .insert([{
       dashboard_id: dashboardId,
-      name: expense.name,
-      total_amount: expense.total_amount,
-      installments: expense.installments,
-      paid_installments: expense.paid_installments || 0,
-      installment_amount: expense.installment_amount,
-      start_month: expense.start_month || 'May/2026',
+      name: safeName,
+      total_amount: safeTotalAmount,
+      installments: safeInstallments,
+      paid_installments: 0,
+      installment_amount: safeInstallmentAmount,
+      start_month: safeStartMonth,
     }])
     .select();
 
@@ -433,6 +479,7 @@ export async function editInstallmentExpense(expenseId, updates) {
     .eq('id', expenseId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
+  await verifyDashboardOwner(expense.dashboard_id);
 
   const newInstallments = updates.installments || expense.installments;
   const newTotalAmount = updates.total_amount ?? expense.total_amount;
@@ -506,6 +553,7 @@ export async function editInstallmentExpense(expenseId, updates) {
 
 // 3. Update Installment and Monthly History
 export async function updateInstallment(expenseId, newPaidAmount, currentMonth, newHistoryData, dashboardId) {
+  await verifyDashboardOwner(dashboardId);
   const { error: errInstallment } = await supabase
     .from('installment_expenses')
     .update({ paid_installments: newPaidAmount })
@@ -555,6 +603,7 @@ export async function toggleOneTimeExpenseStatus(expenseId, currentStatus) {
     .eq('id', expenseId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
+  await verifyDashboardOwner(expense.dashboard_id);
 
   const { error } = await supabase.from('one_time_expenses').update({ status: newStatus }).eq('id', expenseId);
   if (error) throw new Error(error.message);
@@ -586,6 +635,7 @@ export async function incrementInstallment(expenseId, currentPaid, totalInstallm
     .eq('id', expenseId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
+  await verifyDashboardOwner(expense.dashboard_id);
 
   const { error } = await supabase.from('installment_expenses').update({ paid_installments: newPaid }).eq('id', expenseId);
   if (error) throw new Error(error.message);
@@ -607,6 +657,7 @@ export async function decrementInstallment(expenseId, currentPaid, totalInstallm
     .eq('id', expenseId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
+  await verifyDashboardOwner(expense.dashboard_id);
 
   const { error } = await supabase.from('installment_expenses').update({ paid_installments: newPaid }).eq('id', expenseId);
   if (error) throw new Error(error.message);
@@ -626,6 +677,7 @@ export async function toggleMonthlyHistoryStatus(historyId, currentStatus) {
     .eq('id', historyId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
+  await verifyDashboardOwner(historyRecord.dashboard_id);
 
   const details = parseDetails(historyRecord.details);
   const installmentDetails = details.filter(isInstallmentHistoryDetail);
@@ -684,13 +736,13 @@ export async function toggleMonthlyHistoryStatus(historyId, currentStatus) {
 export async function deleteOneTimeExpense(expenseId) {
   if (!supabase) return;
 
-  // Get the expense to find dashboard_id and name
   const { data: expense, error: fetchError } = await supabase
     .from('one_time_expenses')
     .select('id, dashboard_id, name')
     .eq('id', expenseId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
+  await verifyDashboardOwner(expense.dashboard_id);
 
   // Delete from one_time_expenses
   const { error: deleteError } = await supabase.from('one_time_expenses').delete().eq('id', expenseId);
@@ -736,13 +788,13 @@ export async function deleteOneTimeExpense(expenseId) {
 export async function deleteInstallmentExpense(expenseId) {
   if (!supabase) return;
 
-  // Get the expense to find dashboard_id and name
   const { data: expense, error: fetchError } = await supabase
     .from('installment_expenses')
     .select('id, dashboard_id, name')
     .eq('id', expenseId)
     .single();
   if (fetchError) throw new Error(fetchError.message);
+  await verifyDashboardOwner(expense.dashboard_id);
 
   // Delete from installment_expenses
   const { error: deleteError } = await supabase.from('installment_expenses').delete().eq('id', expenseId);

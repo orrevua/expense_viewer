@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { Share2, LogOut, Check, Moon, Sun } from 'lucide-react';
 import { logout } from '@/actions/auth';
+import { getSharePath } from '@/actions/dashboard';
 import { useLocale } from './LocaleProvider';
 
-export default function TopBar({ secretKey, activeDashboardId }) {
+export default function TopBar({ activeDashboardId }) {
   const { t, lang, toggle, dark, toggleDark } = useLocale();
   const [copied, setCopied] = useState(false);
   const [baseUrl, setBaseUrl] = useState('');
@@ -14,9 +15,11 @@ export default function TopBar({ secretKey, activeDashboardId }) {
     setBaseUrl(window.location.origin);
   }, []);
 
-  const handleShare = () => {
+  const handleShare = async () => {
     if (!activeDashboardId) return alert(t('selectDashboard'));
-    const shareLink = `${baseUrl}/${secretKey}?dashboardId=${activeDashboardId}`;
+    const sharePath = await getSharePath();
+    if (!sharePath) return alert('Share link not configured.');
+    const shareLink = `${baseUrl}${sharePath}?dashboardId=${activeDashboardId}`;
     navigator.clipboard.writeText(shareLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

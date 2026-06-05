@@ -39,6 +39,7 @@ Crie um arquivo `.env.local` na raiz do projeto:
 SUPABASE_URL=sua_url_do_supabase
 SUPABASE_ANON_KEY=sua_anon_key
 
+SESSION_SECRET=gere_com_openssl_rand_hex_32
 SHAREABLE_UUID_KEY=share_seu_uuid_aqui
 ```
 
