@@ -45,7 +45,7 @@ export default async function Home({ searchParams }) {
 
   return (
     <main className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         <TopBar secretKey={process.env.SHAREABLE_UUID_KEY} activeDashboardId={activeDashboardId} />
 
         <DashboardSelector dashboards={dashboards} activeId={activeDashboardId || ''} />
@@ -56,35 +56,39 @@ export default async function Home({ searchParams }) {
 
         {activeDashboardId ? <AddExpense dashboardId={activeDashboardId} /> : null}
 
-        <section>
-          <LocalizedHeading k="installmentExpenses" className="text-xl font-bold text-slate-800 mb-4">Installment Expenses</LocalizedHeading>
-          <div>
-            {data.installmentExpenses?.map((expense, idx) => (
-              <InstallmentCard key={expense.id || idx} expense={expense} timeline={data.timeline} />
-            ))}
-            {(!data.installmentExpenses || data.installmentExpenses.length === 0) && <LocalizedParagraph k="noInstallmentExpensesYet" className="text-slate-500">No installment expenses yet.</LocalizedParagraph>}
-          </div>
-        </section>
+        <div className="lg:grid lg:grid-cols-2 lg:gap-8 space-y-6 lg:space-y-0">
+          <div className="space-y-6">
+            <section>
+              <LocalizedHeading k="installmentExpenses" className="text-xl font-bold text-slate-800 mb-4">Installment Expenses</LocalizedHeading>
+              <div>
+                {data.installmentExpenses?.map((expense, idx) => (
+                  <InstallmentCard key={expense.id || idx} expense={expense} timeline={data.timeline} />
+                ))}
+                {(!data.installmentExpenses || data.installmentExpenses.length === 0) && <LocalizedParagraph k="noInstallmentExpensesYet" className="text-slate-500">No installment expenses yet.</LocalizedParagraph>}
+              </div>
+            </section>
 
-        <section>
-          <LocalizedHeading k="oneTimeExpenses" className="text-xl font-bold text-slate-800 mb-4">One-Time Expenses</LocalizedHeading>
-          <div>
-            {data.oneTimeExpenses?.map((expense, idx) => (
-              <OneTimeExpense key={expense.id || idx} expense={expense} />
-            ))}
-            {(!data.oneTimeExpenses || data.oneTimeExpenses.length === 0) && <LocalizedParagraph k="noOneTimeExpensesYet" className="text-slate-500">No one-time expenses yet.</LocalizedParagraph>}
+            <section>
+              <LocalizedHeading k="oneTimeExpenses" className="text-xl font-bold text-slate-800 mb-4">One-Time Expenses</LocalizedHeading>
+              <div>
+                {data.oneTimeExpenses?.map((expense, idx) => (
+                  <OneTimeExpense key={expense.id || idx} expense={expense} />
+                ))}
+                {(!data.oneTimeExpenses || data.oneTimeExpenses.length === 0) && <LocalizedParagraph k="noOneTimeExpensesYet" className="text-slate-500">No one-time expenses yet.</LocalizedParagraph>}
+              </div>
+            </section>
           </div>
-        </section>
 
-        <section>
-          <LocalizedHeading k="monthlyHistory" className="text-xl font-bold text-slate-800 mb-4">Monthly History</LocalizedHeading>
-          <div>
-            {data.timeline?.map((item, idx) => (
-              <HistoryAccordion key={item.id || idx} historyItem={item} />
-            ))}
-            {(!data.timeline || data.timeline.length === 0) && <LocalizedParagraph k="noHistoryYet" className="text-slate-500">No history available yet.</LocalizedParagraph>}
-          </div>
-        </section>
+          <section>
+            <LocalizedHeading k="monthlyHistory" className="text-xl font-bold text-slate-800 mb-4">Monthly History</LocalizedHeading>
+            <div>
+              {data.timeline?.map((item, idx) => (
+                <HistoryAccordion key={item.id || idx} historyItem={item} />
+              ))}
+              {(!data.timeline || data.timeline.length === 0) && <LocalizedParagraph k="noHistoryYet" className="text-slate-500">No history available yet.</LocalizedParagraph>}
+            </div>
+          </section>
+        </div>
       </div>
     </main>
   );
