@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Share2, LogOut, Check, Moon, Sun } from 'lucide-react';
+import { Share2, LogOut, Check, Moon, Sun, Loader2 } from 'lucide-react';
 import { logout } from '@/actions/auth';
 import { getSharePath } from '@/actions/dashboard';
 import { useLocale } from './LocaleProvider';
@@ -10,6 +10,7 @@ export default function TopBar({ activeDashboardId }) {
   const { t, lang, toggle, dark, toggleDark } = useLocale();
   const [copied, setCopied] = useState(false);
   const [baseUrl, setBaseUrl] = useState('');
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     setBaseUrl(window.location.origin);
@@ -26,6 +27,7 @@ export default function TopBar({ activeDashboardId }) {
   };
 
   const handleLogout = async () => {
+    setLoggingOut(true);
     await logout();
   };
 
@@ -59,10 +61,11 @@ export default function TopBar({ activeDashboardId }) {
 
         <button
           onClick={handleLogout}
-          className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all"
+          disabled={loggingOut}
+          className="p-2 text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition-all disabled:opacity-50"
           title="Sign Out"
         >
-          <LogOut className="w-5 h-5" />
+          {loggingOut ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogOut className="w-5 h-5" />}
         </button>
       </div>
     </div>
