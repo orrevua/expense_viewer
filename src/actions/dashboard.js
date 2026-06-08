@@ -375,7 +375,7 @@ export async function getDashboardData(dashboardId, { skipAuthCheck = false } = 
   const adjustedHistory = (monthlyHistoryAsc || []).map(item => ({
     ...item,
     pix_paid: pixPaidByMonth[item.month] || 0,
-    display_amount: item.total_amount - (pixPaidByMonth[item.month] || 0),
+    display_amount: Math.round((item.total_amount - (pixPaidByMonth[item.month] || 0)) * 100) / 100,
   }));
 
   let totalCurrentMonth = 0;

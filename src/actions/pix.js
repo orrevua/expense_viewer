@@ -54,8 +54,8 @@ export async function generatePixForMonth(dashboardId, month) {
     .eq('month', month)
     .order('created_at', { ascending: false });
 
-  const paidAmount = (payments || []).reduce((sum, p) => sum + Number(p.amount), 0);
-  const remainingBalance = Math.max(0, history.total_amount - paidAmount);
+  const paidAmount = Math.round((payments || []).reduce((sum, p) => sum + Number(p.amount), 0) * 100) / 100;
+  const remainingBalance = Math.round(Math.max(0, history.total_amount - paidAmount) * 100) / 100;
 
   if (remainingBalance <= 0) {
     return {
