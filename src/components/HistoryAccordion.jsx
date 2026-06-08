@@ -4,8 +4,9 @@ import { formatCurrency } from '@/utils/currency';
 import { toggleMonthlyHistoryStatus } from '@/actions/dashboard';
 import { ChevronDown, CheckCircle, Circle } from 'lucide-react';
 import { useLocale } from './LocaleProvider';
+import PixQrCode from './PixQrCode';
 
-export default function HistoryAccordion({ historyItem, isReadOnly }) {
+export default function HistoryAccordion({ historyItem, isReadOnly, dashboardId }) {
   const [isPending, startTransition] = useTransition();
   const { t, translateMonth } = useLocale();
 
@@ -75,6 +76,9 @@ export default function HistoryAccordion({ historyItem, isReadOnly }) {
             </span>
           </div>
         ))}
+        {!isReadOnly && !isPaid && historyItem.total_amount > 0 && dashboardId && (
+          <PixQrCode dashboardId={dashboardId} month={historyItem.month} totalAmount={historyItem.total_amount} />
+        )}
       </div>
     </details>
   );

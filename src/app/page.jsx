@@ -83,7 +83,7 @@ export default async function Home({ searchParams }) {
             <LocalizedHeading k="monthlyHistory" className="text-xl font-bold text-slate-800 dark:text-white mb-4">Monthly History</LocalizedHeading>
             <div>
               {data.timeline?.map((item, idx) => (
-                <HistoryAccordion key={item.id || idx} historyItem={item} />
+                <HistoryAccordion key={item.id || idx} historyItem={item} dashboardId={activeDashboardId} />
               ))}
               {(!data.timeline || data.timeline.length === 0) && <LocalizedParagraph k="noHistoryYet" className="text-slate-500 dark:text-slate-400">No history available yet.</LocalizedParagraph>}
             </div>
