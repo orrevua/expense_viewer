@@ -362,20 +362,33 @@ export async function getDashboardData(dashboardId, { skipAuthCheck = false } = 
   // Sort the timeline ascending initially (oldest to newest) to find the first pending month
   const { data: monthlyHistoryAsc } = await supabase.from('monthly_history').select('*').eq('dashboard_id', dashboardId).order('sort_date', { ascending: true });
 
+  const { data: pixPayments } = await supabase
+    .from('pix_payments')
+    .select('month, amount')
+    .eq('dashboard_id', dashboardId);
+
+  const pixPaidByMonth = {};
+  for (const p of (pixPayments || [])) {
+    pixPaidByMonth[p.month] = (pixPaidByMonth[p.month] || 0) + Number(p.amount);
+  }
+
+  const adjustedHistory = (monthlyHistoryAsc || []).map(item => ({
+    ...item,
+    pix_paid: pixPaidByMonth[item.month] || 0,
+    display_amount: item.total_amount - (pixPaidByMonth[item.month] || 0),
+  }));
+
   let totalCurrentMonth = 0;
-  if (monthlyHistoryAsc && monthlyHistoryAsc.length > 0) {
-    // Find the first month where status is 'pending'
-    const pendingMonth = monthlyHistoryAsc.find(month => month.status === 'pending');
+  if (adjustedHistory.length > 0) {
+    const pendingMonth = adjustedHistory.find(month => month.status === 'pending');
     if (pendingMonth) {
-      totalCurrentMonth = pendingMonth.total_amount || 0;
+      totalCurrentMonth = pendingMonth.display_amount || 0;
     } else {
-      // Fallback to the last month if all are paid
-      totalCurrentMonth = monthlyHistoryAsc[monthlyHistoryAsc.length - 1].total_amount || 0;
+      totalCurrentMonth = adjustedHistory[adjustedHistory.length - 1].display_amount || 0;
     }
   }
 
-  // Reverse timeline for UI descending display (newest to oldest or whichever order your UI expects, if it used to be `ascending: false` we sort it descending here)
-  const monthlyHistory = (monthlyHistoryAsc || []).reverse();
+  const monthlyHistory = adjustedHistory.reverse();
 
   const summary = { totalCurrentMonth };
 

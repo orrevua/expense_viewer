@@ -39,7 +39,7 @@ export default function HistoryAccordion({ historyItem, isReadOnly, dashboardId 
           <span className="font-bold text-slate-800 dark:text-slate-100 text-sm">{translateMonth(historyItem.month)}</span>
         </div>
         <div className="flex items-center gap-4">
-          <span className={`font-bold ${isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-100'}`}>{formatCurrency(historyItem.total_amount)}</span>
+          <span className={`font-bold ${isPaid ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-100'}`}>{formatCurrency(historyItem.display_amount ?? historyItem.total_amount)}</span>
           {!isReadOnly && (
             <button
               onClick={handleToggleEvent}
@@ -76,7 +76,7 @@ export default function HistoryAccordion({ historyItem, isReadOnly, dashboardId 
             </span>
           </div>
         ))}
-        {!isReadOnly && !isPaid && historyItem.total_amount > 0 && dashboardId && (
+        {!isReadOnly && !isPaid && (historyItem.display_amount ?? historyItem.total_amount) > 0 && dashboardId && (
           <PixQrCode dashboardId={dashboardId} month={historyItem.month} totalAmount={historyItem.total_amount} />
         )}
       </div>

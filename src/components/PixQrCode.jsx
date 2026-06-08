@@ -118,7 +118,7 @@ export default function PixQrCode({ dashboardId, month, totalAmount }) {
       )}
 
       {isOpen && (
-        <div className="mt-3 p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-white/10 space-y-3">
+        <div className="mt-3 p-4 bg-white/70 dark:bg-white/5 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-white/10 space-y-3">
           <div className="flex justify-between items-center">
             <p className="text-xs text-slate-500 dark:text-slate-400">{t('pixScanToPay')}</p>
             <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
@@ -181,10 +181,10 @@ export default function PixQrCode({ dashboardId, month, totalAmount }) {
               <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">{t('pixPaymentHistory')}</p>
               <div className="space-y-1.5">
                 {payments.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-slate-50 dark:bg-slate-700/30">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(p.amount)}</span>
-                      <span className="text-slate-400 dark:text-slate-500">{new Date(p.created_at).toLocaleDateString()}</span>
+                  <div key={p.id} className="flex items-center justify-between text-xs py-1 px-2 rounded bg-slate-50/50 dark:bg-white/[0.02] min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 truncate">
+                      <span className="font-medium text-emerald-600 dark:text-emerald-400 shrink-0">{formatCurrency(p.amount)}</span>
+                      <span className="text-slate-400 dark:text-slate-500 truncate">{new Date(p.created_at).toLocaleDateString()}</span>
                     </div>
                     <button
                       onClick={() => handleDelete(p.id)}
