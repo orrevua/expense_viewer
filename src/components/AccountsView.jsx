@@ -9,6 +9,7 @@ import { useLocale } from './LocaleProvider';
 import Modal from './Modal';
 import CategoryDot from './CategoryDot';
 import StatusPill from './StatusPill';
+import { monthLabel } from '@/utils/month';
 import { card, cardTitle, input, label, primaryBtn, ghostBtn } from './ui';
 
 const TYPE_ICON = { credit_card: CreditCard, bank: Landmark, cash: Wallet };
@@ -124,6 +125,16 @@ function CardBill({ bill, categories, incomes, onEdit }) {
     try { await fn(); } catch (e) { alert(errorMessage(t, e)); }
     setBusy(false);
   };
+  const markPaid = () => {
+    const now = new Date();
+    const def = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    const v = prompt(t('payDatePrompt'), def);
+    if (v === null) return;
+    const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
+    if (!m) return alert(t('invalidDate'));
+    const iso = `${m[3] || now.getFullYear()}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    run(() => setCardBillPaid(c.id, month, true, iso));
+  };
   const editAmount = () => {
     const v = prompt(t('billAmountPrompt'), manualAmount != null ? String(manualAmount).replace('.', ',') : '');
     if (v === null) return;
@@ -139,6 +150,7 @@ function CardBill({ bill, categories, incomes, onEdit }) {
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-slate-800 dark:text-white truncate">{c.name}</p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
+            {closeDate ? `${t('billOf', { month: monthLabel(closeDate.slice(0, 7), lang, { month: 'long' }).toLocaleLowerCase(lang === 'en' ? 'en-US' : 'pt-BR') })} · ` : ''}
             {dueDate ? t('dueOn', { date: fmtDay(dueDate) }) : t('cardBill')}
             {closeDate ? ` · ${t('closesOn', { date: fmtDay(closeDate) })}` : ''}
           </p>
@@ -150,6 +162,7 @@ function CardBill({ bill, categories, incomes, onEdit }) {
         <p className="text-2xl font-bold text-slate-800 dark:text-white tabular-nums">{formatCurrency(total)}</p>
         <StatusPill status={status} />
       </div>
+      {bill.paidAt && <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">{t('paidOnDate', { date: fmtDay(bill.paidAt) })}</p>}
       <p className="text-xs text-slate-500 dark:text-slate-400">
         {manualAmount != null ? t('billTyped') : t('billFromPurchases')}
         {closeDate && startDate ? ` · ${t('billWindow', { start: fmtDay(startDate), end: fmtDay(closeDate) })}` : ''}
@@ -172,7 +185,7 @@ function CardBill({ bill, categories, incomes, onEdit }) {
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}{t('undoPaid')}
           </button>
         ) : (
-          <button className={`${primaryBtn} py-1.5 px-3 text-sm`} onClick={() => run(() => setCardBillPaid(c.id, month, true))} disabled={busy}>
+          <button className={`${primaryBtn} py-1.5 px-3 text-sm`} onClick={markPaid} disabled={busy}>
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}{t('markBillPaid')}
           </button>
         )}

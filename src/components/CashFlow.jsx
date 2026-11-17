@@ -13,6 +13,7 @@ const ICONS = { income: ArrowDownLeft, fixed: Repeat, card: CreditCard, savings:
 export default function CashFlow({ flow }) {
   const { t, lang, dark } = useLocale();
   const { events, totals } = flow;
+  const fmt = (d) => new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${d}T12:00:00`));
 
   const label = (e) => {
     if (e.type === 'savings') return t('flowSavings');
@@ -36,7 +37,7 @@ export default function CashFlow({ flow }) {
             return (
               <li key={e.id} className="flex items-center gap-2 sm:gap-3 py-2.5">
                 <span className="w-6 sm:w-9 shrink-0 text-center text-xs font-semibold tabular-nums text-slate-500 dark:text-slate-400">
-                  {e.day <= 31 ? String(e.day).padStart(2, '0') : '—'}
+                  {e.type === 'card' && e.payDate && e.payDate.slice(0, 7) !== flow.month ? fmt(e.payDate).replace(' de ', '/').replace('.', '') : e.day <= 31 ? String(e.day).padStart(2, '0') : '—'}
                 </span>
                 <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isIn ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300'}`}
                   style={e.type === 'card' && e.color ? { background: categoryColor(e.color, dark), color: '#fff' } : undefined}>
@@ -45,7 +46,11 @@ export default function CashFlow({ flow }) {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{label(e)}</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                    {e.type === 'card' && e.payWith ? t('paidWithLabel', { name: e.payWith }) : ''}
+                    {e.type === 'card' ? [
+                      e.payDate ? t(e.predicted ? 'plannedOnDate' : 'paidOnDate', { date: fmt(e.payDate) }) : null,
+                      e.dueDate ? t('dueOn', { date: fmt(e.dueDate) }).toLocaleLowerCase(lang === 'en' ? 'en-US' : 'pt-BR') : null,
+                      e.payWith ? t('paidWithLabel', { name: e.payWith }) : null,
+                    ].filter(Boolean).join(' · ') : ''}
                     {e.type === 'savings' ? `${formatCurrency(e.done)} / ${formatCurrency(e.planned)}` : ''}
                     {e.type === 'installments' && e.refMonth ? t('installmentsRef', { month: monthLabel(e.refMonth, lang, { month: 'long' }).toLocaleLowerCase(lang === 'en' ? 'en-US' : 'pt-BR') }) : ''}
                   </p>
@@ -95,9 +100,15 @@ export function IncomeCoverage({ coverage }) {
             ) : (
               <>
                 {c.bills.map((b) => (
-                  <div key={b.card.id} className="flex items-center justify-between text-sm mt-1 pl-3 border-l-2" style={{ borderColor: categoryColor(b.card.color, dark) }}>
-                    <span className="text-slate-600 dark:text-slate-300 truncate">{t('flowCard', { name: b.card.name })} <span className="text-xs text-slate-400">· {b.dueDate ? fmtDay(b.dueDate) : ''}</span></span>
-                    <span className="tabular-nums text-slate-700 dark:text-slate-200">− {formatCurrency(b.total)}</span>
+                  <div key={`${b.card.id}-${b.dueDate}`} className="mt-1.5 pl-3 border-l-2" style={{ borderColor: categoryColor(b.card.color, dark) }}>
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="text-slate-700 dark:text-slate-200 truncate">{t('flowCard', { name: b.card.name })}</span>
+                      <span className="tabular-nums text-slate-700 dark:text-slate-200 whitespace-nowrap">− {formatCurrency(b.total)}</span>
+                    </div>
+                    <p className="text-xs text-slate-400 dark:text-slate-500">
+                      {[b.payDate ? t(b.predicted ? 'plannedOnDate' : 'paidOnDate', { date: fmtDay(b.payDate) }) : null,
+                        b.dueDate ? t('dueOn', { date: fmtDay(b.dueDate) }).toLocaleLowerCase(lang === 'en' ? 'en-US' : 'pt-BR') : null].filter(Boolean).join(' · ')}
+                    </p>
                   </div>
                 ))}
                 <div className="h-2 mt-2 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
