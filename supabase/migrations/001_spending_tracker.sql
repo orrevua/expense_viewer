@@ -76,3 +76,13 @@ CREATE TABLE IF NOT EXISTS finance_settings (
   user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   major_threshold NUMERIC(12, 2) NOT NULL DEFAULT 300
 );
+
+-- Same access model as the existing tables: the app has its own login and checks
+-- ownership on the server, so Supabase RLS (auto-enabled on new tables) must be off.
+-- See 002_fix_rls_new_tables.sql for details.
+ALTER TABLE categories         DISABLE ROW LEVEL SECURITY;
+ALTER TABLE accounts           DISABLE ROW LEVEL SECURITY;
+ALTER TABLE recurring_expenses DISABLE ROW LEVEL SECURITY;
+ALTER TABLE transactions       DISABLE ROW LEVEL SECURITY;
+ALTER TABLE budgets            DISABLE ROW LEVEL SECURITY;
+ALTER TABLE finance_settings   DISABLE ROW LEVEL SECURITY;

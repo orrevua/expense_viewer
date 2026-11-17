@@ -33,9 +33,13 @@ function isMissingTable(error) {
   return error.code === '42P01' || error.code === '42703' || error.code === 'PGRST204' || error.code === 'PGRST205' || /does not exist|Could not find the table/i.test(error.message || '');
 }
 
+function isRlsBlocked(error) {
+  return error.code === '42501' || /row-level security/i.test(error.message || '');
+}
+
 function check(error) {
   if (!error) return;
-  if (isMissingTable(error)) throw new SetupRequiredError('setup');
+  if (isMissingTable(error) || isRlsBlocked(error)) throw new SetupRequiredError('setup');
   throw new Error(error.message);
 }
 
