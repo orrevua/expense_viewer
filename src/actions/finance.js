@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { getSessionUser } from '@/actions/auth';
 import { COLOR_KEYS } from '@/lib/palette';
+import { billFunding } from '@/lib/billing';
 import { monthRange, normalizeMonth, shiftMonth, toViewerMonth, isMonthKey, currentMonthKey, billDueMonth, billWindow, dueDate, todayISO } from '@/utils/month';
 
 const KINDS = ['expense', 'income'];
@@ -444,11 +445,15 @@ async function unmarkRecurringPaidImpl(id, month) {
 function recurringStatus(recurring, transactions, month) {
   const today = new Date();
   const thisMonth = currentMonthKey();
-  return recurring.filter((r) => activeIn(r, month)).map((r) => {
+  // Fixed income also shows in months before it was registered (your salary existed before
+  // you typed it in); fixed expenses start in the month they were added.
+  const shows = (r) => (r.kind === 'income' ? !r.end_month || month <= r.end_month : activeIn(r, month));
+  return recurring.filter(shows).map((r) => {
     const payment = transactions.find((t) => t.recurring_id === r.id && t.date.startsWith(month));
     let status = 'pending';
     if (payment) status = 'paid';
-    else if (month < thisMonth || (month === thisMonth && today.getDate() > r.due_day)) status = 'late';
+    // income that was not marked as received stays "expected", never "late"
+    else if (r.kind !== 'income' && (month < thisMonth || (month === thisMonth && today.getDate() > r.due_day))) status = 'late';
     return { ...r, status, paidAmount: payment?.amount ?? null, paymentId: payment?.id ?? null, dueDate: dueDate(month, r.due_day) };
   });
 }
@@ -500,11 +505,12 @@ async function setCardBillAmountImpl(accountId, month, amountInput) {
   revalidate();
 }
 
-async function setCardBillPaidImpl(accountId, month, paid) {
+async function setCardBillPaidImpl(accountId, month, paid, paidDate) {
   const user = await requireUser();
   if (!isMonthKey(month)) throw new Error('Invalid month.');
   await assertCard(user.id, accountId);
-  await upsertBill(user.id, accountId, month, { paid_at: paid ? todayISO() : null });
+  const date = paid ? (isoDate(paidDate) || todayISO()) : null;
+  await upsertBill(user.id, accountId, month, { paid_at: date });
   revalidate();
 }
 
@@ -679,8 +685,8 @@ function round2(n) {
 // card purchases count in the month their bill is due.
 async function loadMonthModel(userId, month, { trendMonths = 1 } = {}) {
   const months = Array.from({ length: trendMonths }, (_, i) => shiftMonth(month, i - trendMonths + 1));
-  const billMonths = [...months, shiftMonth(month, 1)];
-  const { start } = monthRange(shiftMonth(months[0], -2));
+  const billMonths = [shiftMonth(months[0], -1), ...months, shiftMonth(month, 1)];
+  const { start } = monthRange(shiftMonth(months[0], -3));
   const { end } = monthRange(shiftMonth(month, 1));
 
   const [categories, accounts, transactions, recurring, billRows, installmentBills, goals, entries] = await Promise.all([
@@ -697,10 +703,16 @@ async function loadMonthModel(userId, month, { trendMonths = 1 } = {}) {
   const cardIds = new Set(accounts.filter((a) => a.type === 'credit_card').map((a) => a.id));
   const billsByMonth = Object.fromEntries(billMonths.map((m) => [m, cardBills(accounts, transactions, m, billRows)]));
 
+  // Which month's money pays each bill (see billFunding). Bills due in m or m+1 can be paid with m's money.
+  const fundedBills = (m) => [shiftMonth(m, -1), m, shiftMonth(m, 1)].flatMap((k) => billsByMonth[k] || [])
+    .filter((b) => b.total > 0 || b.paidAt) // a bill with nothing on it is not a bill to pay
+    .map((b) => ({ ...b, ...billFunding(b, recurring, todayISO()) }))
+    .filter((b) => b.fundMonth === m);
+
   const monthTotals = (m) => {
     const inM = transactions.filter((t) => t.date.startsWith(m));
     const nonCard = inM.filter((t) => t.kind === 'expense' && !cardIds.has(t.account_id));
-    const bills = billsByMonth[m] || [];
+    const bills = fundedBills(m);
     return {
       income: sum(inM.filter((t) => t.kind === 'income')),
       nonCard,
@@ -710,15 +722,15 @@ async function loadMonthModel(userId, month, { trendMonths = 1 } = {}) {
     };
   };
 
-  return { months, categories, accounts, transactions, recurring, billsByMonth, installmentBills, goals, entries, cardIds, monthTotals };
+  return { months, categories, accounts, transactions, recurring, billsByMonth, fundedBills, installmentBills, goals, entries, cardIds, monthTotals };
 }
 
 function buildCashFlow(model, month) {
-  const { recurring, transactions, billsByMonth, installmentBills, goals, entries, cardIds, accounts } = model;
+  const { recurring, transactions, billsByMonth, fundedBills, installmentBills, goals, entries, cardIds, accounts } = model;
   const items = recurringStatus(recurring, transactions, month);
   const incomes = items.filter((i) => i.kind === 'income');
   const fixed = items.filter((i) => i.kind !== 'income');
-  const bills = billsByMonth[month] || [];
+  const bills = fundedBills(month);
   const inM = transactions.filter((t) => t.date.startsWith(month));
   const events = [];
 
@@ -736,7 +748,7 @@ function buildCashFlow(model, month) {
   for (const b of bills) {
     if (!b.total && b.status !== 'paid') continue;
     const payWith = recurring.find((r) => r.id === b.card.pay_with_id);
-    events.push({ id: `c-${b.card.id}`, type: 'card', day: b.dueDate ? Number(b.dueDate.slice(8, 10)) : 28, date: b.dueDate, label: b.card.name, amount: b.total, status: b.status, kind: 'expense', payWith: payWith?.name || null, color: b.card.color });
+    events.push({ id: `c-${b.card.id}-${b.month}`, type: 'card', day: b.fundDay, date: b.payDate, dueDate: b.dueDate, payDate: b.payDate, paidAt: b.paidAt, predicted: b.predicted, fundedEarly: b.fundedEarly, label: b.card.name, amount: b.total, status: b.status, kind: 'expense', payWith: payWith?.name || null, color: b.card.color });
   }
   const planned = round2(goals.reduce((a, g) => a + g.monthly_amount, 0));
   const savedThisMonth = round2(entries.filter((e) => e.date.startsWith(month)).reduce((a, e) => a + e.amount, 0));
@@ -760,19 +772,16 @@ function buildCashFlow(model, month) {
   const totalSavings = round2(events.filter((e) => e.type === 'savings').reduce((a, e) => a + e.amount, 0));
   const totalOut = round2(events.filter((e) => e.kind === 'expense' && e.type !== 'savings').reduce((a, e) => a + e.amount, 0));
 
-  // Each fixed income covers the cards set to be paid with it: the first bill due on/after the income day.
+  // Each fixed income and the card bills paid (or planned to be paid) with that money.
   const coverage = incomes.map((inc) => {
-    const linked = accounts.filter((a) => a.type === 'credit_card' && a.pay_with_id === inc.id).map((card) => {
-      const billMonth = card.due_day && card.due_day < inc.due_day ? shiftMonth(month, 1) : month;
-      const bill = (billsByMonth[billMonth] || []).find((b) => b.card.id === card.id);
-      return bill ? { card, total: bill.total, status: bill.status, dueDate: bill.dueDate } : null;
-    }).filter(Boolean);
+    const linked = bills.filter((b) => b.sourceIncomeId === inc.id && (b.total || b.paidAt))
+      .map((b) => ({ card: b.card, total: b.total, status: b.status, dueDate: b.dueDate, payDate: b.payDate, predicted: b.predicted }));
     const amount = inc.status === 'paid' ? inc.paidAmount : inc.amount;
     const billsTotal = round2(linked.reduce((a, l) => a + l.total, 0));
     return { income: inc, amount, date: inc.dueDate, bills: linked, billsTotal, left: round2(amount - billsTotal) };
   });
 
-  return { events, totals: { in: totalIn, out: totalOut, savings: totalSavings, left: round2(totalIn - totalOut - totalSavings) }, coverage, recurringItems: items };
+  return { month, events, totals: { in: totalIn, out: totalOut, savings: totalSavings, left: round2(totalIn - totalOut - totalSavings) }, coverage, recurringItems: items };
 }
 
 export async function getOverviewData(monthParam) {
