@@ -2,6 +2,7 @@
 
 import { CreditCard, Repeat, PiggyBank, ShoppingBag, Users, ArrowDownLeft } from 'lucide-react';
 import { formatCurrency } from '@/utils/currency';
+import { monthLabel } from '@/utils/month';
 import { categoryColor } from '@/lib/palette';
 import { useLocale } from './LocaleProvider';
 import StatusPill from './StatusPill';
@@ -10,7 +11,7 @@ import { card, cardTitle } from './ui';
 const ICONS = { income: ArrowDownLeft, fixed: Repeat, card: CreditCard, savings: PiggyBank, daily: ShoppingBag, installments: Users };
 
 export default function CashFlow({ flow }) {
-  const { t, dark } = useLocale();
+  const { t, lang, dark } = useLocale();
   const { events, totals } = flow;
 
   const label = (e) => {
@@ -46,6 +47,7 @@ export default function CashFlow({ flow }) {
                   <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                     {e.type === 'card' && e.payWith ? t('paidWithLabel', { name: e.payWith }) : ''}
                     {e.type === 'savings' ? `${formatCurrency(e.done)} / ${formatCurrency(e.planned)}` : ''}
+                    {e.type === 'installments' && e.refMonth ? t('installmentsRef', { month: monthLabel(e.refMonth, lang, { month: 'long' }).toLocaleLowerCase(lang === 'en' ? 'en-US' : 'pt-BR') }) : ''}
                   </p>
                 </div>
                 {['income', 'fixed', 'card', 'savings'].includes(e.type) && <span className="hidden sm:block"><StatusPill status={e.status} income={isIn} /></span>}

@@ -243,8 +243,12 @@ async function loadInstallmentBills(userId, monthKeys) {
   const ids = (dashboards || []).map((d) => d.id);
   const result = Object.fromEntries(monthKeys.map((k) => [k, 0]));
   if (ids.length === 0) return result;
-  const viewerMonths = monthKeys.map(toViewerMonth);
-  const byViewer = Object.fromEntries(monthKeys.map((k) => [toViewerMonth(k), k]));
+  // The Installments tab lists each amount under the month it refers to, and it is
+  // PAID the following month (Oct -> paid in Nov, Nov -> paid in Dec). So the amount
+  // that leaves your pocket in month M is the Installments tab's month M-1.
+  const viewerFor = (k) => toViewerMonth(shiftMonth(k, -1));
+  const viewerMonths = monthKeys.map(viewerFor);
+  const byViewer = Object.fromEntries(monthKeys.map((k) => [viewerFor(k), k]));
 
   const { data: history } = await supabase
     .from('monthly_history')
@@ -743,7 +747,7 @@ function buildCashFlow(model, month) {
   const daily = sum(inM.filter((t) => t.kind === 'expense' && !t.recurring_id && !cardIds.has(t.account_id)));
   if (daily > 0) events.push({ id: 'daily', type: 'daily', day: 32, label: 'daily', amount: daily, status: 'paid', kind: 'expense' });
   const inst = installmentBills[month] || 0;
-  if (inst > 0) events.push({ id: 'installments', type: 'installments', day: 33, label: 'installments', amount: inst, status: 'pending', kind: 'expense' });
+  if (inst > 0) events.push({ id: 'installments', type: 'installments', day: 33, label: 'installments', amount: inst, status: 'pending', kind: 'expense', refMonth: shiftMonth(month, -1) });
 
   const order = { income: 0, savings: 1, card: 2, fixed: 3, daily: 4, installments: 5 };
   events.sort((a, b) => a.day - b.day || order[a.type] - order[b.type]);
