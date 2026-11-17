@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
-import { addTransaction, updateTransaction } from '@/actions/finance';
+import { addTransaction, updateTransaction, errorMessage } from '@/lib/financeClient';
 import { useLocale } from './LocaleProvider';
 import { input, label, primaryBtn } from './ui';
 import { todayISO } from '@/utils/month';
@@ -61,7 +61,7 @@ export default function TransactionForm({ categories, accounts = [], transaction
       onClose();
     } catch (err) {
       console.error(err);
-      setError(t('errorSaving'));
+      setError(errorMessage(t, err));
       setSaving(false);
     }
   };

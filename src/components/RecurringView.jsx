@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2, Loader2, Check, Undo2, CalendarOff, Repeat } from 'lucide-react';
-import { createRecurring, updateRecurring, deleteRecurring, endRecurring, markRecurringPaid, unmarkRecurringPaid } from '@/actions/finance';
+import { createRecurring, updateRecurring, deleteRecurring, endRecurring, markRecurringPaid, unmarkRecurringPaid, errorMessage } from '@/lib/financeClient';
 import { formatCurrency } from '@/utils/currency';
 import { useLocale } from './LocaleProvider';
 import Modal from './Modal';
@@ -34,8 +34,8 @@ function RecurringForm({ item, kind: defaultKind, month, categories, accounts, o
       if (item) await updateRecurring(item.id, payload);
       else await createRecurring(payload);
       onClose();
-    } catch {
-      alert(t('errorSaving'));
+    } catch (e) {
+      alert(errorMessage(t, e));
       setSaving(false);
     }
   };
@@ -101,7 +101,7 @@ function RecurringRow({ item, month, category, account, onEdit }) {
   const fmtDay = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' });
   const run = async (fn) => {
     setBusy(true);
-    try { await fn(); } catch { alert(t('errorSaving')); }
+    try { await fn(); } catch (e) { alert(errorMessage(t, e)); }
     setBusy(false);
   };
 

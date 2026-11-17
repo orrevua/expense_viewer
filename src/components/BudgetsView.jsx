@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Trash2, Plus, Loader2 } from 'lucide-react';
-import { setBudget, createCategory, updateCategory, deleteCategory } from '@/actions/finance';
+import { setBudget, createCategory, updateCategory, deleteCategory, errorMessage } from '@/lib/financeClient';
 import { formatCurrency } from '@/utils/currency';
 import { COLOR_KEYS, categoryColor } from '@/lib/palette';
 import { useLocale } from './LocaleProvider';
@@ -18,7 +18,7 @@ function BudgetInput({ categoryId, initial }) {
     const normalized = value.trim();
     if (normalized === (initial ? String(initial).replace('.', ',') : '')) return;
     setSaving(true);
-    try { await setBudget(categoryId, normalized || 0); } catch { alert(t('errorSaving')); }
+    try { await setBudget(categoryId, normalized || 0); } catch (e) { alert(errorMessage(t, e)); }
     setSaving(false);
   };
   return (
@@ -68,18 +68,18 @@ function CategoryList({ kind, categories }) {
     e.preventDefault();
     if (!name.trim()) return;
     setBusy(true);
-    try { await createCategory({ name, color, kind }); setName(''); } catch { alert(t('errorSaving')); }
+    try { await createCategory({ name, color, kind }); setName(''); } catch (e) { alert(errorMessage(t, e)); }
     setBusy(false);
   };
 
   const rename = async (c, value) => {
     if (!value.trim() || value.trim() === c.name) return;
-    try { await updateCategory(c.id, { name: value }); } catch { alert(t('errorSaving')); }
+    try { await updateCategory(c.id, { name: value }); } catch (e) { alert(errorMessage(t, e)); }
   };
 
   const remove = async (c) => {
     if (!confirm(t('confirmDeleteCategory', { name: c.name }))) return;
-    try { await deleteCategory(c.id); } catch { alert(t('errorSaving')); }
+    try { await deleteCategory(c.id); } catch (e) { alert(errorMessage(t, e)); }
   };
 
   return (
@@ -105,7 +105,7 @@ function CategoryList({ kind, categories }) {
             </div>
             {editingColor === c.id && (
               <div className="pl-9 pt-2">
-                <ColorPicker value={c.color} onChange={async (k) => { setEditingColor(null); try { await updateCategory(c.id, { color: k }); } catch { alert(t('errorSaving')); } }} />
+                <ColorPicker value={c.color} onChange={async (k) => { setEditingColor(null); try { await updateCategory(c.id, { color: k }); } catch (e) { alert(errorMessage(t, e)); } }} />
               </div>
             )}
           </li>
