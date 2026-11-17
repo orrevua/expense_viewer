@@ -131,7 +131,7 @@ export default function TransactionsView({ month, categories, accounts = [], tra
                 </div>
                 <ul className="divide-y divide-slate-100 dark:divide-white/5">
                   {list.map((tx) => (
-                    <TransactionRow key={tx.id} tx={tx} category={catById[tx.category_id]} account={accById[tx.account_id]} threshold={threshold} onEdit={setEditing} onDelete={onDelete} />
+                    <TransactionRow key={tx.id} tx={tx} category={catById[tx.category_id]} account={accById[tx.account_id]} threshold={threshold} onEdit={tx.payment_method === 'carryover' ? undefined : setEditing} onDelete={onDelete} />
                   ))}
                 </ul>
               </section>

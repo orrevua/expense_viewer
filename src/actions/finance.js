@@ -11,6 +11,9 @@ const KINDS = ['expense', 'income'];
 const PAYMENT_METHODS = ['pix', 'credit', 'debit', 'cash', 'transfer', 'boleto', 'other'];
 const ACCOUNT_TYPES = ['bank', 'cash', 'credit_card'];
 const DEFAULT_THRESHOLD = 300;
+// Transactions holding the leftover carried from the previous month use this payment method.
+const CARRYOVER = 'carryover';
+const isCarry = (t) => t.payment_method === CARRYOVER;
 
 const DEFAULT_CATEGORIES = [
   { name: 'Alimentação', color: 'orange', kind: 'expense' },
@@ -652,6 +655,40 @@ function goalsWithProgress(goals, entries, month) {
   });
 }
 
+// ---------- Leftover carried into the next month ----------
+
+// Saves the leftover carried into `month` as a transaction on day 1 (income if positive,
+// expense if the previous month ended short). Replaces any previous one for that month.
+async function setCarryoverImpl(month, amountInput) {
+  const user = await requireUser();
+  if (!isMonthKey(month)) throw new Error('Invalid month.');
+  const raw = typeof amountInput === 'string' ? amountInput.trim().replace(/\s/g, '') : String(amountInput);
+  const negative = raw.startsWith('-') || raw.startsWith('−');
+  const amount = money(raw.replace(/^[-−]/, ''));
+  if (amount === null) throw new Error('Invalid amount.');
+  await removeCarryoverImpl(month);
+  const { error } = await supabase.from('transactions').insert([{
+    user_id: user.id,
+    kind: negative ? 'expense' : 'income',
+    amount,
+    description: negative ? 'Faltou do mês anterior' : 'Sobra do mês anterior',
+    payment_method: CARRYOVER,
+    date: `${month}-01`,
+  }]);
+  check(error);
+  revalidate();
+}
+
+async function removeCarryoverImpl(month) {
+  const user = await requireUser();
+  if (!isMonthKey(month)) throw new Error('Invalid month.');
+  const { start, end } = monthRange(month);
+  const { error } = await supabase.from('transactions').delete()
+    .eq('user_id', user.id).eq('payment_method', CARRYOVER).gte('date', start).lt('date', end);
+  check(error);
+  revalidate();
+}
+
 // ---------- Installments backup ----------
 
 // Full copy of the Installments tab data (what you owe / are owed), as JSON.
@@ -711,10 +748,10 @@ async function loadMonthModel(userId, month, { trendMonths = 1 } = {}) {
 
   const monthTotals = (m) => {
     const inM = transactions.filter((t) => t.date.startsWith(m));
-    const nonCard = inM.filter((t) => t.kind === 'expense' && !cardIds.has(t.account_id));
+    const nonCard = inM.filter((t) => t.kind === 'expense' && !cardIds.has(t.account_id) && !isCarry(t));
     const bills = fundedBills(m);
     return {
-      income: sum(inM.filter((t) => t.kind === 'income')),
+      income: sum(inM.filter((t) => t.kind === 'income' && !isCarry(t))),
       nonCard,
       bills,
       expense: round2(sum(nonCard) + bills.reduce((a, b) => a + b.total, 0)),
@@ -722,10 +759,11 @@ async function loadMonthModel(userId, month, { trendMonths = 1 } = {}) {
     };
   };
 
-  return { months, categories, accounts, transactions, recurring, billsByMonth, fundedBills, installmentBills, goals, entries, cardIds, monthTotals };
+  const fundedMonthOf = (b) => billFunding(b, recurring, todayISO()).fundMonth;
+  return { months, categories, accounts, transactions, recurring, billsByMonth, fundedBills, fundedMonthOf, installmentBills, goals, entries, cardIds, monthTotals };
 }
 
-function buildCashFlow(model, month) {
+function buildCashFlow(model, month, carryIn = 0) {
   const { recurring, transactions, billsByMonth, fundedBills, installmentBills, goals, entries, cardIds, accounts } = model;
   const items = recurringStatus(recurring, transactions, month);
   const incomes = items.filter((i) => i.kind === 'income');
@@ -737,7 +775,7 @@ function buildCashFlow(model, month) {
   for (const i of incomes) {
     events.push({ id: `r-${i.id}`, type: 'income', day: i.due_day, date: i.dueDate, label: i.name, amount: i.status === 'paid' ? i.paidAmount : i.amount, status: i.status, kind: 'income' });
   }
-  for (const t of inM.filter((x) => x.kind === 'income' && !x.recurring_id)) {
+  for (const t of inM.filter((x) => x.kind === 'income' && !x.recurring_id && !isCarry(x))) {
     events.push({ id: `t-${t.id}`, type: 'income', day: Number(t.date.slice(8, 10)), date: t.date, label: t.description, amount: t.amount, status: 'paid', kind: 'income' });
   }
   for (const f of fixed) {
@@ -756,12 +794,23 @@ function buildCashFlow(model, month) {
     const firstIncomeDay = incomes.length ? Math.min(...incomes.map((i) => i.due_day)) : 1;
     events.push({ id: 'savings', type: 'savings', day: firstIncomeDay, date: dueDate(month, firstIncomeDay), label: 'savings', amount: Math.max(planned, savedThisMonth), done: savedThisMonth, planned, status: savedThisMonth >= planned && planned > 0 ? 'paid' : 'pending', kind: 'expense' });
   }
-  const daily = sum(inM.filter((t) => t.kind === 'expense' && !t.recurring_id && !cardIds.has(t.account_id)));
+  const daily = sum(inM.filter((t) => t.kind === 'expense' && !t.recurring_id && !cardIds.has(t.account_id) && !isCarry(t)));
   if (daily > 0) events.push({ id: 'daily', type: 'daily', day: 32, label: 'daily', amount: daily, status: 'paid', kind: 'expense' });
+  // Leftover from the previous month: the confirmed one (a saved transaction) or the calculated one.
+  const savedCarry = inM.find(isCarry);
+  const carryAmount = savedCarry ? (savedCarry.kind === 'income' ? savedCarry.amount : -savedCarry.amount) : round2(carryIn);
+  if (carryAmount !== 0 || savedCarry) {
+    events.push({
+      id: 'carry', type: 'carry', day: 0, date: `${month}-01`, label: 'carry',
+      amount: Math.abs(carryAmount), kind: carryAmount >= 0 ? 'income' : 'expense',
+      confirmed: !!savedCarry, calculated: round2(carryIn), refMonth: shiftMonth(month, -1),
+      status: savedCarry ? 'paid' : 'pending',
+    });
+  }
   const inst = installmentBills[month] || 0;
   if (inst > 0) events.push({ id: 'installments', type: 'installments', day: 33, label: 'installments', amount: inst, status: 'pending', kind: 'expense', refMonth: shiftMonth(month, -1) });
 
-  const order = { income: 0, savings: 1, card: 2, fixed: 3, daily: 4, installments: 5 };
+  const order = { carry: -1, income: 0, savings: 1, card: 2, fixed: 3, daily: 4, installments: 5 };
   events.sort((a, b) => a.day - b.day || order[a.type] - order[b.type]);
   let running = 0;
   for (const e of events) {
@@ -771,6 +820,7 @@ function buildCashFlow(model, month) {
   const totalIn = round2(events.filter((e) => e.kind === 'income').reduce((a, e) => a + e.amount, 0));
   const totalSavings = round2(events.filter((e) => e.type === 'savings').reduce((a, e) => a + e.amount, 0));
   const totalOut = round2(events.filter((e) => e.kind === 'expense' && e.type !== 'savings').reduce((a, e) => a + e.amount, 0));
+  const carry = events.find((e) => e.type === 'carry');
 
   // Each fixed income and the card bills paid (or planned to be paid) with that money.
   const coverage = incomes.map((inc) => {
@@ -781,7 +831,33 @@ function buildCashFlow(model, month) {
     return { income: inc, amount, date: inc.dueDate, bills: linked, billsTotal, left: round2(amount - billsTotal) };
   });
 
-  return { month, events, totals: { in: totalIn, out: totalOut, savings: totalSavings, left: round2(totalIn - totalOut - totalSavings) }, coverage, recurringItems: items };
+  return { month, events, carry: carry || null, totals: { in: totalIn, out: totalOut, savings: totalSavings, left: round2(totalIn - totalOut - totalSavings) }, coverage, recurringItems: items };
+}
+
+// First month you have anything in the tracker (transactions, fixed items, card bills,
+// savings): the leftover chain starts there with nothing carried in.
+function firstActivityMonth(model, fallback) {
+  const marks = [];
+  for (const t of model.transactions) if (!isCarry(t)) marks.push(t.date.slice(0, 7));
+  for (const r of model.recurring) if (r.kind !== 'income') marks.push(r.start_month);
+  for (const bills of Object.values(model.billsByMonth)) {
+    for (const b of bills) if (b.manualAmount != null || b.paidAt || b.purchasesTotal > 0) marks.push(model.fundedMonthOf(b));
+  }
+  for (const e of model.entries) marks.push(e.date.slice(0, 7));
+  const valid = marks.filter(Boolean).sort();
+  return valid[0] || fallback;
+}
+
+// Cash flow of `month` with the leftover of each previous month carried into the next one.
+function flowWithCarry(model, month) {
+  const start = firstActivityMonth(model, month);
+  let carry = 0;
+  let flow = null;
+  for (let m = model.months[0] > start ? model.months[0] : start; m <= month; m = shiftMonth(m, 1)) {
+    flow = buildCashFlow(model, m, m === start ? 0 : carry);
+    carry = flow.totals.left;
+  }
+  return flow || buildCashFlow(model, month, 0);
 }
 
 export async function getOverviewData(monthParam) {
@@ -789,7 +865,7 @@ export async function getOverviewData(monthParam) {
     const user = await requireUser();
     const month = normalizeMonth(monthParam);
     const [model, budgets, threshold] = await Promise.all([
-      loadMonthModel(user.id, month, { trendMonths: 6 }),
+      loadMonthModel(user.id, month, { trendMonths: 12 }),
       loadBudgets(user.id),
       loadThreshold(user.id),
     ]);
@@ -806,12 +882,12 @@ export async function getOverviewData(monthParam) {
     const cardOther = round2(cur.bills.reduce((a, b) => a + b.other, 0));
     if (cardOther > 0) byCategory.card_other = cardOther;
 
-    const trend = months.map((m) => {
+    const trend = months.slice(-6).map((m) => {
       const t = monthTotals(m);
       return { month: m, expense: t.expense, income: t.income, installments: t.installments };
     });
 
-    const flow = buildCashFlow(model, month);
+    const flow = flowWithCarry(model, month);
     const fixedItems = flow.recurringItems.filter((i) => i.kind !== 'income');
 
     return {
@@ -885,14 +961,14 @@ export async function getSavingsData(monthParam) {
   return guarded(async () => {
     const user = await requireUser();
     const month = normalizeMonth(monthParam);
-    const model = await loadMonthModel(user.id, month, { trendMonths: 3 });
-    const flow = buildCashFlow(model, month);
+    const model = await loadMonthModel(user.id, month, { trendMonths: 12 });
+    const flow = flowWithCarry(model, month);
     const goals = goalsWithProgress(model.goals, model.entries, month);
 
     const incomes = flow.recurringItems.filter((i) => i.kind === 'income');
     const expectedIncome = round2(incomes.reduce((a, i) => a + i.amount, 0)) || flow.totals.in;
     // Average of the last 3 months (cash basis) as the "cost of living", falling back to this month.
-    const history = model.months.map((m) => model.monthTotals(m)).map((t) => t.expense + t.installments).filter((v) => v > 0);
+    const history = model.months.slice(-3).map((m) => model.monthTotals(m)).map((t) => t.expense + t.installments).filter((v) => v > 0);
     const avgSpending = history.length ? round2(history.reduce((a, v) => a + v, 0) / history.length) : flow.totals.out;
     const fixedCost = round2(flow.recurringItems.filter((i) => i.kind !== 'income').reduce((a, i) => a + i.amount, 0));
     const free = round2(expectedIncome - flow.totals.out);
@@ -980,3 +1056,5 @@ export async function updateGoal(...args) { return run(() => updateGoalImpl(...a
 export async function deleteGoal(...args) { return run(() => deleteGoalImpl(...args)); }
 export async function addSavingsEntry(...args) { return run(() => addSavingsEntryImpl(...args)); }
 export async function deleteSavingsEntry(...args) { return run(() => deleteSavingsEntryImpl(...args)); }
+export async function setCarryover(...args) { return run(() => setCarryoverImpl(...args)); }
+export async function removeCarryover(...args) { return run(() => removeCarryoverImpl(...args)); }

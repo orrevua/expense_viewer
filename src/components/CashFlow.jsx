@@ -1,6 +1,8 @@
 'use client';
 
-import { CreditCard, Repeat, PiggyBank, ShoppingBag, Users, ArrowDownLeft } from 'lucide-react';
+import { useState } from 'react';
+import { CreditCard, Repeat, PiggyBank, ShoppingBag, Users, ArrowDownLeft, CornerDownRight, Loader2 } from 'lucide-react';
+import { setCarryover, removeCarryover, errorMessage } from '@/lib/financeClient';
 import { formatCurrency } from '@/utils/currency';
 import { monthLabel } from '@/utils/month';
 import { categoryColor } from '@/lib/palette';
@@ -8,14 +10,30 @@ import { useLocale } from './LocaleProvider';
 import StatusPill from './StatusPill';
 import { card, cardTitle } from './ui';
 
-const ICONS = { income: ArrowDownLeft, fixed: Repeat, card: CreditCard, savings: PiggyBank, daily: ShoppingBag, installments: Users };
+const ICONS = { carry: CornerDownRight, income: ArrowDownLeft, fixed: Repeat, card: CreditCard, savings: PiggyBank, daily: ShoppingBag, installments: Users };
 
 export default function CashFlow({ flow }) {
   const { t, lang, dark } = useLocale();
   const { events, totals } = flow;
   const fmt = (d) => new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${d}T12:00:00`));
 
+  const [busy, setBusy] = useState(false);
+  const monthName = (m) => monthLabel(m, lang, { month: 'long' }).toLocaleLowerCase(lang === 'en' ? 'en-US' : 'pt-BR');
+  const run = async (fn) => {
+    setBusy(true);
+    try { await fn(); } catch (err) { alert(errorMessage(t, err)); }
+    setBusy(false);
+  };
+  const confirmCarry = (e) => run(() => setCarryover(flow.month, String(e.kind === 'income' ? e.amount : -e.amount)));
+  const adjustCarry = (e) => {
+    const cur = e.kind === 'income' ? e.amount : -e.amount;
+    const v = prompt(t('carryPrompt', { month: monthName(e.refMonth) }), String(cur).replace('.', ','));
+    if (v === null) return;
+    if (!v.trim()) return run(() => removeCarryover(flow.month));
+    run(() => setCarryover(flow.month, v));
+  };
   const label = (e) => {
+    if (e.type === 'carry') return t(e.kind === 'income' ? 'carryIn' : 'carryShort', { month: monthName(e.refMonth) });
     if (e.type === 'savings') return t('flowSavings');
     if (e.type === 'daily') return t('flowDaily');
     if (e.type === 'installments') return t('flowInstallments');
@@ -37,7 +55,7 @@ export default function CashFlow({ flow }) {
             return (
               <li key={e.id} className="flex items-center gap-2 sm:gap-3 py-2.5">
                 <span className="w-6 sm:w-9 shrink-0 text-center text-xs font-semibold tabular-nums text-slate-500 dark:text-slate-400">
-                  {e.type === 'card' && e.payDate && e.payDate.slice(0, 7) !== flow.month ? fmt(e.payDate).replace(' de ', '/').replace('.', '') : e.day <= 31 ? String(e.day).padStart(2, '0') : '—'}
+                  {e.type === 'carry' ? '01' : e.type === 'card' && e.payDate && e.payDate.slice(0, 7) !== flow.month ? fmt(e.payDate).replace(' de ', '/').replace('.', '') : e.day <= 31 ? String(e.day).padStart(2, '0') : '—'}
                 </span>
                 <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isIn ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-white/10 dark:text-slate-300'}`}
                   style={e.type === 'card' && e.color ? { background: categoryColor(e.color, dark), color: '#fff' } : undefined}>
@@ -52,6 +70,15 @@ export default function CashFlow({ flow }) {
                       e.payWith ? t('paidWithLabel', { name: e.payWith }) : null,
                     ].filter(Boolean).join(' · ') : ''}
                     {e.type === 'savings' ? `${formatCurrency(e.done)} / ${formatCurrency(e.planned)}` : ''}
+                    {e.type === 'carry' ? (
+                      <span className="inline-flex flex-wrap items-center gap-x-2">
+                        <span>{t(e.confirmed ? 'carryConfirmed' : 'carryCalculated')}</span>
+                        {e.confirmed && e.calculated !== (e.kind === 'income' ? e.amount : -e.amount) ? <span>{t('carryCalcWas', { amount: formatCurrency(e.calculated) })}</span> : null}
+                        {!e.confirmed && <button disabled={busy} onClick={() => confirmCarry(e)} className="font-medium text-violet-600 dark:text-violet-400 hover:underline">{t('carryConfirm')}</button>}
+                        <button disabled={busy} onClick={() => adjustCarry(e)} className="font-medium text-violet-600 dark:text-violet-400 hover:underline">{t('carryAdjust')}</button>
+                        {busy && <Loader2 className="w-3 h-3 animate-spin" />}
+                      </span>
+                    ) : ''}
                     {e.type === 'installments' && e.refMonth ? t('installmentsRef', { month: monthLabel(e.refMonth, lang, { month: 'long' }).toLocaleLowerCase(lang === 'en' ? 'en-US' : 'pt-BR') }) : ''}
                   </p>
                 </div>
