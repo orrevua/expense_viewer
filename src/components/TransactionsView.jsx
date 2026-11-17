@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useCallback } from 'react';
 import { Plus, Download, Search } from 'lucide-react';
-import { deleteTransaction } from '@/actions/finance';
+import { deleteTransaction, errorMessage } from '@/lib/financeClient';
 import { formatCurrency } from '@/utils/currency';
 import { currentMonthKey, todayISO } from '@/utils/month';
 import { useLocale } from './LocaleProvider';
@@ -54,7 +54,7 @@ export default function TransactionsView({ month, categories, accounts = [], tra
 
   const onDelete = async (tx) => {
     if (!confirm(t('confirmDeleteTransaction'))) return;
-    try { await deleteTransaction(tx.id); } catch { alert(t('errorSaving')); }
+    try { await deleteTransaction(tx.id); } catch (e) { alert(errorMessage(t, e)); }
   };
 
   const close = useCallback(() => setEditing(null), []);

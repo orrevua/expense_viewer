@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2, Loader2, PiggyBank, ArrowUpRight, ArrowDownRight, ShieldCheck, X } from 'lucide-react';
-import { createGoal, updateGoal, deleteGoal, addSavingsEntry, deleteSavingsEntry } from '@/actions/finance';
+import { createGoal, updateGoal, deleteGoal, addSavingsEntry, deleteSavingsEntry, errorMessage } from '@/lib/financeClient';
 import { formatCurrency } from '@/utils/currency';
 import { categoryColor, COLOR_KEYS } from '@/lib/palette';
 import { monthLabel } from '@/utils/month';
@@ -29,8 +29,8 @@ function GoalForm({ goal, preset, onClose }) {
       if (goal) await updateGoal(goal.id, form);
       else await createGoal(form);
       onClose();
-    } catch {
-      alert(t('errorSaving'));
+    } catch (e) {
+      alert(errorMessage(t, e));
       setSaving(false);
     }
   };
@@ -76,7 +76,7 @@ function GoalCard({ goal: g, onEdit }) {
   const fmtDay = (d) => new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${d}T12:00:00`));
   const run = async (fn) => {
     setBusy(true);
-    try { await fn(); } catch { alert(t('errorSaving')); }
+    try { await fn(); } catch (e) { alert(errorMessage(t, e)); }
     setBusy(false);
   };
   const move = (withdraw) => {

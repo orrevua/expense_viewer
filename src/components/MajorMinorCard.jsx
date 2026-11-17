@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { setMajorThreshold } from '@/actions/finance';
+import { setMajorThreshold, errorMessage } from '@/lib/financeClient';
 import { formatCurrency } from '@/utils/currency';
 import { CATEGORY_COLORS } from '@/lib/palette';
 import { useLocale } from './LocaleProvider';
@@ -23,7 +23,7 @@ export default function MajorMinorCard({ size, categories }) {
   const save = async (e) => {
     e.preventDefault();
     setSaving(true);
-    try { await setMajorThreshold(value); setEditing(false); } catch { alert(t('errorSaving')); }
+    try { await setMajorThreshold(value); setEditing(false); } catch (e) { alert(errorMessage(t, e)); }
     setSaving(false);
   };
 

@@ -26,7 +26,12 @@ const DEFAULT_CATEGORIES = [
   { name: 'Outras receitas', color: 'gray', kind: 'income' },
 ];
 
-class SetupRequiredError extends Error {}
+class SetupRequiredError extends Error {
+  constructor(detail) {
+    super('setup');
+    this.detail = detail;
+  }
+}
 
 function isMissingTable(error) {
   if (!error) return false;
@@ -39,7 +44,7 @@ function isRlsBlocked(error) {
 
 function check(error) {
   if (!error) return;
-  if (isMissingTable(error) || isRlsBlocked(error)) throw new SetupRequiredError('setup');
+  if (isMissingTable(error) || isRlsBlocked(error)) throw new SetupRequiredError(error.message);
   throw new Error(error.message);
 }
 
@@ -110,7 +115,7 @@ async function loadCategories(userId) {
   return seeded;
 }
 
-export async function createCategory({ name, color, kind }) {
+async function createCategoryImpl({ name, color, kind }) {
   const user = await requireUser();
   const safeName = str(name, 60);
   if (!safeName) throw new Error('Name is required.');
@@ -124,7 +129,7 @@ export async function createCategory({ name, color, kind }) {
   revalidate();
 }
 
-export async function updateCategory(id, { name, color }) {
+async function updateCategoryImpl(id, { name, color }) {
   const user = await requireUser();
   const updates = {};
   if (name !== undefined) {
@@ -138,7 +143,7 @@ export async function updateCategory(id, { name, color }) {
   revalidate();
 }
 
-export async function deleteCategory(id) {
+async function deleteCategoryImpl(id) {
   const user = await requireUser();
   const { error } = await supabase.from('categories').delete().eq('id', id).eq('user_id', user.id);
   check(error);
@@ -164,7 +169,7 @@ function cleanTransaction(input) {
   };
 }
 
-export async function addTransaction(input) {
+async function addTransactionImpl(input) {
   const user = await requireUser();
   const row = cleanTransaction(input);
   row.category_id = await assertCategory(user.id, input.category_id);
@@ -175,7 +180,7 @@ export async function addTransaction(input) {
   revalidate();
 }
 
-export async function updateTransaction(id, input) {
+async function updateTransactionImpl(id, input) {
   const user = await requireUser();
   const row = cleanTransaction(input);
   row.category_id = await assertCategory(user.id, input.category_id);
@@ -185,7 +190,7 @@ export async function updateTransaction(id, input) {
   revalidate();
 }
 
-export async function deleteTransaction(id) {
+async function deleteTransactionImpl(id) {
   const user = await requireUser();
   const { error } = await supabase.from('transactions').delete().eq('id', id).eq('user_id', user.id);
   check(error);
@@ -213,7 +218,7 @@ async function loadBudgets(userId) {
   return (data || []).map((b) => ({ ...b, amount: Number(b.amount) }));
 }
 
-export async function setBudget(categoryId, amount) {
+async function setBudgetImpl(categoryId, amount) {
   const user = await requireUser();
   const safeCategory = await assertCategory(user.id, categoryId);
   if (!safeCategory) throw new Error('Category not found.');
@@ -289,7 +294,7 @@ async function assertIncome(userId, id) {
   return data ? id : null;
 }
 
-export async function createAccount(input) {
+async function createAccountImpl(input) {
   const user = await requireUser();
   const row = cleanAccount(input);
   row.pay_with_id = row.type === 'credit_card' ? await assertIncome(user.id, input.pay_with_id) : null;
@@ -298,7 +303,7 @@ export async function createAccount(input) {
   revalidate();
 }
 
-export async function updateAccount(id, input) {
+async function updateAccountImpl(id, input) {
   const user = await requireUser();
   const row = cleanAccount(input);
   row.pay_with_id = row.type === 'credit_card' ? await assertIncome(user.id, input.pay_with_id) : null;
@@ -307,7 +312,7 @@ export async function updateAccount(id, input) {
   revalidate();
 }
 
-export async function deleteAccount(id) {
+async function deleteAccountImpl(id) {
   const user = await requireUser();
   const { error } = await supabase.from('accounts').delete().eq('id', id).eq('user_id', user.id);
   check(error);
@@ -322,7 +327,7 @@ async function loadThreshold(userId) {
   return data ? Number(data.major_threshold) : DEFAULT_THRESHOLD;
 }
 
-export async function setMajorThreshold(value) {
+async function setMajorThresholdImpl(value) {
   const user = await requireUser();
   const amount = money(value);
   if (!amount) throw new Error('Invalid amount.');
@@ -357,7 +362,7 @@ function cleanRecurring(input) {
   };
 }
 
-export async function createRecurring(input) {
+async function createRecurringImpl(input) {
   const user = await requireUser();
   const row = cleanRecurring(input);
   row.category_id = await assertCategory(user.id, input.category_id);
@@ -369,7 +374,7 @@ export async function createRecurring(input) {
   revalidate();
 }
 
-export async function updateRecurring(id, input) {
+async function updateRecurringImpl(id, input) {
   const user = await requireUser();
   const row = cleanRecurring(input);
   row.category_id = await assertCategory(user.id, input.category_id);
@@ -380,7 +385,7 @@ export async function updateRecurring(id, input) {
 }
 
 // Stop repeating after `month` (history and past payments are kept).
-export async function endRecurring(id, month) {
+async function endRecurringImpl(id, month) {
   const user = await requireUser();
   const { error } = await supabase.from('recurring_expenses')
     .update({ end_month: isMonthKey(month) ? month : currentMonthKey() })
@@ -389,7 +394,7 @@ export async function endRecurring(id, month) {
   revalidate();
 }
 
-export async function deleteRecurring(id) {
+async function deleteRecurringImpl(id) {
   const user = await requireUser();
   const { error } = await supabase.from('recurring_expenses').delete().eq('id', id).eq('user_id', user.id);
   check(error);
@@ -397,7 +402,7 @@ export async function deleteRecurring(id) {
 }
 
 // Marking as paid records a real transaction, so it shows up everywhere else.
-export async function markRecurringPaid(id, month, amountInput) {
+async function markRecurringPaidImpl(id, month, amountInput) {
   const user = await requireUser();
   if (!isMonthKey(month)) throw new Error('Invalid month.');
   const { data: r, error } = await supabase.from('recurring_expenses').select('*').eq('id', id).eq('user_id', user.id).maybeSingle();
@@ -423,7 +428,7 @@ export async function markRecurringPaid(id, month, amountInput) {
   revalidate();
 }
 
-export async function unmarkRecurringPaid(id, month) {
+async function unmarkRecurringPaidImpl(id, month) {
   const user = await requireUser();
   if (!isMonthKey(month)) throw new Error('Invalid month.');
   const { start, end } = monthRange(month);
@@ -481,7 +486,7 @@ async function upsertBill(userId, accountId, month, fields) {
 }
 
 // amount empty/null -> go back to "sum of purchases"
-export async function setCardBillAmount(accountId, month, amountInput) {
+async function setCardBillAmountImpl(accountId, month, amountInput) {
   const user = await requireUser();
   if (!isMonthKey(month)) throw new Error('Invalid month.');
   await assertCard(user.id, accountId);
@@ -491,7 +496,7 @@ export async function setCardBillAmount(accountId, month, amountInput) {
   revalidate();
 }
 
-export async function setCardBillPaid(accountId, month, paid) {
+async function setCardBillPaidImpl(accountId, month, paid) {
   const user = await requireUser();
   if (!isMonthKey(month)) throw new Error('Invalid month.');
   await assertCard(user.id, accountId);
@@ -575,21 +580,21 @@ function cleanGoal(input) {
   };
 }
 
-export async function createGoal(input) {
+async function createGoalImpl(input) {
   const user = await requireUser();
   const { error } = await supabase.from('savings_goals').insert([{ ...cleanGoal(input), user_id: user.id }]);
   check(error);
   revalidate();
 }
 
-export async function updateGoal(id, input) {
+async function updateGoalImpl(id, input) {
   const user = await requireUser();
   const { error } = await supabase.from('savings_goals').update(cleanGoal(input)).eq('id', id).eq('user_id', user.id);
   check(error);
   revalidate();
 }
 
-export async function deleteGoal(id) {
+async function deleteGoalImpl(id) {
   const user = await requireUser();
   const { error } = await supabase.from('savings_goals').delete().eq('id', id).eq('user_id', user.id);
   check(error);
@@ -597,7 +602,7 @@ export async function deleteGoal(id) {
 }
 
 // amount > 0 saves, amount < 0 withdraws
-export async function addSavingsEntry(goalId, amountInput, withdraw = false, note = '') {
+async function addSavingsEntryImpl(goalId, amountInput, withdraw = false, note = '') {
   const user = await requireUser();
   const { data: goal } = await supabase.from('savings_goals').select('id').eq('id', goalId).eq('user_id', user.id).maybeSingle();
   if (!goal) throw new Error('Goal not found.');
@@ -610,7 +615,7 @@ export async function addSavingsEntry(goalId, amountInput, withdraw = false, not
   revalidate();
 }
 
-export async function deleteSavingsEntry(id) {
+async function deleteSavingsEntryImpl(id) {
   const user = await requireUser();
   const { error } = await supabase.from('savings_entries').delete().eq('id', id).eq('user_id', user.id);
   check(error);
@@ -922,3 +927,43 @@ export async function getBudgetsData(monthParam) {
     return { month, categories, budgets, spent };
   });
 }
+
+// ---------- Mutations exposed to the browser ----------
+// Next.js hides thrown error messages in production, so mutations return
+// { ok: false, error, setup } instead, and the page can say what went wrong.
+
+async function run(fn) {
+  try {
+    await fn();
+    return { ok: true };
+  } catch (e) {
+    console.error(e);
+    if (e instanceof SetupRequiredError) return { ok: false, setup: true, error: e.detail || 'setup' };
+    return { ok: false, error: e.message || 'error' };
+  }
+}
+
+export async function createCategory(...args) { return run(() => createCategoryImpl(...args)); }
+export async function updateCategory(...args) { return run(() => updateCategoryImpl(...args)); }
+export async function deleteCategory(...args) { return run(() => deleteCategoryImpl(...args)); }
+export async function addTransaction(...args) { return run(() => addTransactionImpl(...args)); }
+export async function updateTransaction(...args) { return run(() => updateTransactionImpl(...args)); }
+export async function deleteTransaction(...args) { return run(() => deleteTransactionImpl(...args)); }
+export async function setBudget(...args) { return run(() => setBudgetImpl(...args)); }
+export async function createAccount(...args) { return run(() => createAccountImpl(...args)); }
+export async function updateAccount(...args) { return run(() => updateAccountImpl(...args)); }
+export async function deleteAccount(...args) { return run(() => deleteAccountImpl(...args)); }
+export async function setMajorThreshold(...args) { return run(() => setMajorThresholdImpl(...args)); }
+export async function createRecurring(...args) { return run(() => createRecurringImpl(...args)); }
+export async function updateRecurring(...args) { return run(() => updateRecurringImpl(...args)); }
+export async function endRecurring(...args) { return run(() => endRecurringImpl(...args)); }
+export async function deleteRecurring(...args) { return run(() => deleteRecurringImpl(...args)); }
+export async function markRecurringPaid(...args) { return run(() => markRecurringPaidImpl(...args)); }
+export async function unmarkRecurringPaid(...args) { return run(() => unmarkRecurringPaidImpl(...args)); }
+export async function setCardBillAmount(...args) { return run(() => setCardBillAmountImpl(...args)); }
+export async function setCardBillPaid(...args) { return run(() => setCardBillPaidImpl(...args)); }
+export async function createGoal(...args) { return run(() => createGoalImpl(...args)); }
+export async function updateGoal(...args) { return run(() => updateGoalImpl(...args)); }
+export async function deleteGoal(...args) { return run(() => deleteGoalImpl(...args)); }
+export async function addSavingsEntry(...args) { return run(() => addSavingsEntryImpl(...args)); }
+export async function deleteSavingsEntry(...args) { return run(() => deleteSavingsEntryImpl(...args)); }

@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { Plus, Pencil, Trash2, Loader2, CreditCard, Landmark, Wallet, ChevronDown, Check, Undo2, Receipt } from 'lucide-react';
-import { createAccount, updateAccount, deleteAccount, setCardBillAmount, setCardBillPaid } from '@/actions/finance';
+import { createAccount, updateAccount, deleteAccount, setCardBillAmount, setCardBillPaid, errorMessage } from '@/lib/financeClient';
 import { formatCurrency } from '@/utils/currency';
 import { categoryColor, COLOR_KEYS } from '@/lib/palette';
 import { useLocale } from './LocaleProvider';
@@ -36,8 +36,8 @@ function AccountForm({ account, defaultType, incomes = [], onClose }) {
       if (account) await updateAccount(account.id, payload);
       else await createAccount(payload);
       onClose();
-    } catch {
-      alert(t('errorSaving'));
+    } catch (e) {
+      alert(errorMessage(t, e));
       setSaving(false);
     }
   };
@@ -97,7 +97,7 @@ function Actions({ account, onEdit }) {
   const { t } = useLocale();
   const remove = async () => {
     if (!confirm(t('confirmDeleteAccount', { name: account.name }))) return;
-    try { await deleteAccount(account.id); } catch { alert(t('errorSaving')); }
+    try { await deleteAccount(account.id); } catch (e) { alert(errorMessage(t, e)); }
   };
   const cls = 'p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10';
   return (
@@ -121,7 +121,7 @@ function CardBill({ bill, categories, incomes, onEdit }) {
 
   const run = async (fn) => {
     setBusy(true);
-    try { await fn(); } catch { alert(t('errorSaving')); }
+    try { await fn(); } catch (e) { alert(errorMessage(t, e)); }
     setBusy(false);
   };
   const editAmount = () => {
