@@ -9,8 +9,15 @@ export function isMonthKey(v) {
   return typeof v === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v);
 }
 
+// The tracker starts in October 2026: earlier months are treated as if they did not
+// exist (cannot be opened, and nothing before them is counted or carried over).
+// The Installments tab is not affected and keeps all of its history.
+export const TRACKING_START = '2026-10';
+export const TRACKING_START_DATE = `${TRACKING_START}-01`;
+
 export function normalizeMonth(v) {
-  return isMonthKey(v) ? v : currentMonthKey();
+  const key = isMonthKey(v) ? v : currentMonthKey();
+  return key < TRACKING_START ? TRACKING_START : key;
 }
 
 export function shiftMonth(key, delta) {

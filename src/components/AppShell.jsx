@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { LayoutDashboard, ArrowLeftRight, CreditCard, LogOut, Moon, Sun, Loader2, Wallet, Repeat, Users, PiggyBank as Piggy, Target } from 'lucide-react';
 import { logout } from '@/actions/auth';
 import { useLocale } from './LocaleProvider';
+import InstallButton from './InstallButton';
 
 const TABS = [
   { href: '/', key: 'navOverview', short: 'navShortOverview', icon: LayoutDashboard },
@@ -56,6 +57,7 @@ export default function AppShell({ userName, children }) {
 
           <div className="ml-auto flex items-center gap-2">
             {userName && <span className="hidden 2xl:block text-sm text-slate-500 dark:text-slate-400 mr-1">{userName}</span>}
+            <InstallButton className={`flex items-center gap-2 px-2.5 py-2 text-sm font-medium text-violet-700 dark:text-violet-300 ${iconBtn}`} />
             <button onClick={toggle} className={`px-2.5 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 ${iconBtn}`} title={lang === 'en' ? 'Mudar para Português' : 'Switch to English'}>
               {lang === 'en' ? 'EN' : 'PT'}
             </button>

@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getSessionUser } from '@/actions/auth';
 import { COLOR_KEYS } from '@/lib/palette';
 import { billFunding } from '@/lib/billing';
-import { monthRange, normalizeMonth, shiftMonth, toViewerMonth, isMonthKey, currentMonthKey, billDueMonth, billWindow, dueDate, todayISO } from '@/utils/month';
+import { monthRange, normalizeMonth, shiftMonth, toViewerMonth, isMonthKey, currentMonthKey, billDueMonth, billWindow, dueDate, todayISO, TRACKING_START, TRACKING_START_DATE } from '@/utils/month';
 
 const KINDS = ['expense', 'income'];
 const PAYMENT_METHODS = ['pix', 'credit', 'debit', 'cash', 'transfer', 'boleto', 'other'];
@@ -163,6 +163,7 @@ function cleanTransaction(input) {
   if (amount === null || amount === 0) throw new Error('Invalid amount.');
   if (!description) throw new Error('Description is required.');
   if (!date) throw new Error('Invalid date.');
+  if (date < TRACKING_START_DATE) throw new Error('Date before the start of the tracker (October 2026).');
   return {
     kind: KINDS.includes(input.kind) ? input.kind : 'expense',
     amount,
@@ -513,6 +514,7 @@ async function setCardBillPaidImpl(accountId, month, paid, paidDate) {
   if (!isMonthKey(month)) throw new Error('Invalid month.');
   await assertCard(user.id, accountId);
   const date = paid ? (isoDate(paidDate) || todayISO()) : null;
+  if (date && date < TRACKING_START_DATE) throw new Error('Date before the start of the tracker (October 2026).');
   await upsertBill(user.id, accountId, month, { paid_at: date });
   revalidate();
 }
@@ -850,7 +852,8 @@ function firstActivityMonth(model, fallback) {
 
 // Cash flow of `month` with the leftover of each previous month carried into the next one.
 function flowWithCarry(model, month) {
-  const start = firstActivityMonth(model, month);
+  const first = firstActivityMonth(model, month);
+  const start = first < TRACKING_START ? TRACKING_START : first;
   let carry = 0;
   let flow = null;
   for (let m = model.months[0] > start ? model.months[0] : start; m <= month; m = shiftMonth(m, 1)) {
@@ -882,7 +885,7 @@ export async function getOverviewData(monthParam) {
     const cardOther = round2(cur.bills.reduce((a, b) => a + b.other, 0));
     if (cardOther > 0) byCategory.card_other = cardOther;
 
-    const trend = months.slice(-6).map((m) => {
+    const trend = months.slice(-6).filter((m) => m >= TRACKING_START).map((m) => {
       const t = monthTotals(m);
       return { month: m, expense: t.expense, income: t.income, installments: t.installments };
     });
@@ -968,7 +971,7 @@ export async function getSavingsData(monthParam) {
     const incomes = flow.recurringItems.filter((i) => i.kind === 'income');
     const expectedIncome = round2(incomes.reduce((a, i) => a + i.amount, 0)) || flow.totals.in;
     // Average of the last 3 months (cash basis) as the "cost of living", falling back to this month.
-    const history = model.months.slice(-3).map((m) => model.monthTotals(m)).map((t) => t.expense + t.installments).filter((v) => v > 0);
+    const history = model.months.slice(-3).filter((m) => m >= TRACKING_START).map((m) => model.monthTotals(m)).map((t) => t.expense + t.installments).filter((v) => v > 0);
     const avgSpending = history.length ? round2(history.reduce((a, v) => a + v, 0) / history.length) : flow.totals.out;
     const fixedCost = round2(flow.recurringItems.filter((i) => i.kind !== 'income').reduce((a, i) => a + i.amount, 0));
     const free = round2(expectedIncome - flow.totals.out);
