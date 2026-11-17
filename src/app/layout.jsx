@@ -16,10 +16,7 @@ export const metadata = {
   title: 'Money Tracker',
   applicationName: 'Controle de Gastos',
   appleWebApp: { capable: true, title: 'Gastos', statusBarStyle: 'black-translucent' },
-  icons: {
-    icon: [{ url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' }, { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
-    apple: [{ url: '/icons/apple-touch-icon.png', sizes: '180x180' }],
-  },
+  // icons: src/app/favicon.ico, icon.png and apple-icon.png (Next.js file conventions)
   description: 'Track all your spending, income, budgets and installments',
   openGraph: {
     type: 'website',
