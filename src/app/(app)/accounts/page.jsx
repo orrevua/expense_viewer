@@ -11,7 +11,7 @@ export default async function AccountsPage({ searchParams }) {
       <PageHeader titleKey="navAccounts">
         {result.ok && <MonthPicker month={result.month} />}
       </PageHeader>
-      {result.ok ? <AccountsView cards={result.cards} others={result.others} categories={result.categories} /> : <LoadState result={result} />}
+      {result.ok ? <AccountsView cards={result.cards} others={result.others} categories={result.categories} incomes={result.incomes} /> : <LoadState result={result} />}
     </>
   );
 }

@@ -11,9 +11,10 @@ import CategoryDot from './CategoryDot';
 import { PAYMENT_METHODS } from './TransactionForm';
 import { card, cardTitle, input, label, primaryBtn, ghostBtn } from './ui';
 
-function RecurringForm({ item, month, categories, accounts, onClose }) {
+function RecurringForm({ item, kind: defaultKind, month, categories, accounts, onClose }) {
   const { t } = useLocale();
   const [form, setForm] = useState({
+    kind: item?.kind || defaultKind || 'expense',
     name: item?.name || '',
     amount: item ? String(item.amount).replace('.', ',') : '',
     due_day: item?.due_day || 10,
@@ -23,6 +24,7 @@ function RecurringForm({ item, month, categories, accounts, onClose }) {
   });
   const [saving, setSaving] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const isIncome = form.kind === 'income';
 
   const submit = async (e) => {
     e.preventDefault();
@@ -39,39 +41,49 @@ function RecurringForm({ item, month, categories, accounts, onClose }) {
   };
 
   return (
-    <Modal title={t(item ? 'editRecurring' : 'addRecurring')} onClose={onClose} onSubmit={submit}>
+    <Modal title={t(item ? 'editRecurring' : isIncome ? 'addFixedIncome' : 'addRecurring')} onClose={onClose} onSubmit={submit}>
+      <div className="flex gap-1 p-1 bg-slate-100 dark:bg-white/5 rounded-xl">
+        {['expense', 'income'].map((k) => (
+          <button key={k} type="button" onClick={() => setForm((f) => ({ ...f, kind: k, category_id: '' }))}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold ${form.kind === k ? 'bg-white dark:bg-white/15 shadow-sm text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}>
+            {t(k)}
+          </button>
+        ))}
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <label className={label}>{t('description')}</label>
-          <input className={input} required autoFocus maxLength={120} value={form.name} onChange={set('name')} placeholder="Aluguel, Internet, Netflix…" />
+          <input className={input} required autoFocus maxLength={120} value={form.name} onChange={set('name')} placeholder={isIncome ? 'Salário, Adiantamento…' : 'Aluguel, Internet, Netflix…'} />
         </div>
         <div>
           <label className={label}>{t('amountLabel')}</label>
           <input className={input} required inputMode="decimal" placeholder="0,00" pattern="[0-9]+([.,][0-9]{1,2})?" value={form.amount} onChange={set('amount')} />
         </div>
         <div>
-          <label className={label}>{t('dueDay')}</label>
+          <label className={label}>{t(isIncome ? 'receiveDay' : 'dueDay')}</label>
           <input className={input} type="number" min={1} max={31} required value={form.due_day} onChange={set('due_day')} />
         </div>
         <div className="col-span-2 sm:col-span-1">
           <label className={label}>{t('category')}</label>
           <select className={input} value={form.category_id} onChange={set('category_id')}>
             <option value="">{t('uncategorized')}</option>
-            {categories.filter((c) => c.kind === 'expense').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {categories.filter((c) => c.kind === form.kind).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div className="col-span-2 sm:col-span-1">
-          <label className={label}>{t('paymentMethod')}</label>
-          <select className={input} value={form.payment_method} onChange={set('payment_method')}>
-            {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{t(`pm_${m}`)}</option>)}
-          </select>
-        </div>
+        {!isIncome && (
+          <div className="col-span-2 sm:col-span-1">
+            <label className={label}>{t('paymentMethod')}</label>
+            <select className={input} value={form.payment_method} onChange={set('payment_method')}>
+              {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{t(`pm_${m}`)}</option>)}
+            </select>
+          </div>
+        )}
         {accounts.length > 0 && (
           <div className="col-span-2">
             <label className={label}>{t('account')}</label>
             <select className={input} value={form.account_id} onChange={set('account_id')}>
               <option value="">{t('noAccount')}</option>
-              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {t(`type_${a.type}`)}</option>)}
+              {accounts.filter((a) => !isIncome || a.type !== 'credit_card').map((a) => <option key={a.id} value={a.id}>{a.name} · {t(`type_${a.type}`)}</option>)}
             </select>
           </div>
         )}
@@ -93,8 +105,9 @@ function RecurringRow({ item, month, category, account, onEdit }) {
     setBusy(false);
   };
 
+  const isIncome = item.kind === 'income';
   const pay = () => {
-    const value = prompt(t('amountPaidPrompt'), String(item.amount).replace('.', ','));
+    const value = prompt(t(isIncome ? 'amountReceivedPrompt' : 'amountPaidPrompt'), String(item.amount).replace('.', ','));
     if (value === null) return;
     run(() => markRecurringPaid(item.id, month, value.trim() || item.amount));
   };
@@ -106,16 +119,16 @@ function RecurringRow({ item, month, category, account, onEdit }) {
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{item.name}</p>
         <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-          {t('dueOn', { date: fmtDay.format(new Date(`${item.dueDate}T12:00:00`)) })} · {category?.name || t('uncategorized')} · {account ? account.name : t(`pm_${item.payment_method}`)}
+          {isIncome ? fmtDay.format(new Date(`${item.dueDate}T12:00:00`)) : t('dueOn', { date: fmtDay.format(new Date(`${item.dueDate}T12:00:00`)) })} · {category?.name || t('uncategorized')}{isIncome ? (account ? ` · ${account.name}` : '') : ` · ${account ? account.name : t(`pm_${item.payment_method}`)}`}
         </p>
       </div>
       <div className="text-right">
-        <p className="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">{formatCurrency(item.status === 'paid' ? item.paidAmount : item.amount)}</p>
+        <p className={`text-sm font-semibold tabular-nums ${isIncome ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-100'}`}>{isIncome ? '+ ' : ''}{formatCurrency(item.status === 'paid' ? item.paidAmount : item.amount)}</p>
         {item.status === 'paid' && item.paidAmount !== item.amount && (
           <p className="text-[11px] text-slate-400 tabular-nums line-through">{formatCurrency(item.amount)}</p>
         )}
       </div>
-      <div className="w-24 flex justify-end"><StatusPill status={item.status} /></div>
+      <div className="w-24 flex justify-end"><StatusPill status={item.status} income={isIncome} /></div>
       <div className="flex items-center gap-1 ml-auto sm:ml-0">
         {item.status === 'paid' ? (
           <button className={`${ghostBtn} py-1.5`} disabled={busy} onClick={() => run(() => unmarkRecurringPaid(item.id, month))}>
@@ -123,7 +136,7 @@ function RecurringRow({ item, month, category, account, onEdit }) {
           </button>
         ) : (
           <button className={`${primaryBtn} py-1.5 px-3 text-sm`} disabled={busy} onClick={pay}>
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}{t('markPaid')}
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}{t(isIncome ? 'markReceived' : 'markPaid')}
           </button>
         )}
         <button className={iconBtn} onClick={() => onEdit(item)} title={t('edit')} aria-label={t('edit')}><Pencil className="w-4 h-4" /></button>
@@ -158,43 +171,60 @@ export function RecurringSummary({ summary }) {
   );
 }
 
-export default function RecurringView({ month, items, summary, categories, accounts }) {
+function Section({ title, hint, empty, items, month, catById, accById, onEdit }) {
+  const order = { late: 0, pending: 1, paid: 2 };
+  const sorted = [...items].sort((a, b) => a.due_day - b.due_day || order[a.status] - order[b.status]);
+  return (
+    <div className={`${card} p-5`}>
+      <h3 className={cardTitle}>{title}</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-2">{hint}</p>
+      {sorted.length === 0 ? (
+        <div className="py-8 text-center text-slate-500 dark:text-slate-400">
+          <Repeat className="w-8 h-8 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
+          <p className="text-sm">{empty}</p>
+        </div>
+      ) : (
+        <ul className="divide-y divide-slate-100 dark:divide-white/5">
+          {sorted.map((item) => (
+            <RecurringRow key={item.id} item={item} month={month} category={catById[item.category_id]} account={accById[item.account_id]} onEdit={onEdit} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export default function RecurringView({ month, items, incomes = [], summary, incomeSummary, categories, accounts }) {
   const { t } = useLocale();
   const [editing, setEditing] = useState(null);
   const close = useCallback(() => setEditing(null), []);
   const catById = Object.fromEntries(categories.map((c) => [c.id, c]));
   const accById = Object.fromEntries(accounts.map((a) => [a.id, a]));
-  const order = { late: 0, pending: 1, paid: 2 };
-  const sorted = [...items].sort((a, b) => order[a.status] - order[b.status] || a.due_day - b.due_day);
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
       <div className="space-y-6 lg:order-2">
         <div className={`${card} p-5`}>
+          <h3 className={`${cardTitle} mb-3`}>{t('incomeTotal')}</h3>
+          <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 tabular-nums">{formatCurrency(incomeSummary?.total || 0)}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('recurringPaidOf', { paid: incomeSummary?.paidCount || 0, count: incomeSummary?.count || 0 })}</p>
+        </div>
+        <div className={`${card} p-5`}>
           <h3 className={`${cardTitle} mb-3`}>{t('recurringTotal')}</h3>
           <RecurringSummary summary={summary} />
         </div>
-        <button className={`${primaryBtn} w-full`} onClick={() => setEditing({})}><Plus className="w-4 h-4" />{t('addRecurring')}</button>
+        <div className="grid grid-cols-1 gap-3">
+          <button className={`${primaryBtn} w-full`} onClick={() => setEditing({ kind: 'expense' })}><Plus className="w-4 h-4" />{t('addRecurring')}</button>
+          <button className={`${ghostBtn} w-full py-2.5`} onClick={() => setEditing({ kind: 'income' })}><Plus className="w-4 h-4" />{t('addFixedIncome')}</button>
+        </div>
       </div>
 
-      <div className={`${card} p-5 lg:col-span-2 lg:order-1`}>
-        <h3 className={cardTitle}>{t('recurringTitle')}</h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 mb-2">{t('recurringHint')}</p>
-        {sorted.length === 0 ? (
-          <div className="py-10 text-center text-slate-500 dark:text-slate-400">
-            <Repeat className="w-8 h-8 mx-auto mb-3 text-slate-300 dark:text-slate-600" />
-            <p className="text-sm">{t('noRecurring')}</p>
-          </div>
-        ) : (
-          <ul className="divide-y divide-slate-100 dark:divide-white/5">
-            {sorted.map((item) => (
-              <RecurringRow key={item.id} item={item} month={month} category={catById[item.category_id]} account={accById[item.account_id]} onEdit={setEditing} />
-            ))}
-          </ul>
-        )}
+      <div className="space-y-6 lg:col-span-2 lg:order-1">
+        <Section title={t('fixedIncomeTitle')} hint={t('fixedIncomeHint')} empty={t('noFixedIncome')} items={incomes} month={month} catById={catById} accById={accById} onEdit={setEditing} />
+        <Section title={t('recurringTitle')} hint={t('recurringHint')} empty={t('noRecurring')} items={items} month={month} catById={catById} accById={accById} onEdit={setEditing} />
       </div>
 
-      {editing && <RecurringForm item={editing.id ? editing : null} month={month} categories={categories} accounts={accounts} onClose={close} />}
+      {editing && <RecurringForm item={editing.id ? editing : null} kind={editing.kind} month={month} categories={categories} accounts={accounts} onClose={close} />}
     </div>
   );
 }

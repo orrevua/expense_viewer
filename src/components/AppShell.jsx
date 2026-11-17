@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ArrowLeftRight, PiggyBank, CreditCard, LogOut, Moon, Sun, Loader2, Wallet, Repeat, Users } from 'lucide-react';
+import { LayoutDashboard, ArrowLeftRight, CreditCard, LogOut, Moon, Sun, Loader2, Wallet, Repeat, Users, PiggyBank as Piggy, Target } from 'lucide-react';
 import { logout } from '@/actions/auth';
 import { useLocale } from './LocaleProvider';
 
@@ -12,7 +12,8 @@ const TABS = [
   { href: '/transactions', key: 'navTransactions', short: 'navShortTransactions', icon: ArrowLeftRight },
   { href: '/recurring', key: 'navRecurring', short: 'navShortRecurring', icon: Repeat },
   { href: '/accounts', key: 'navAccounts', short: 'navShortAccounts', icon: CreditCard },
-  { href: '/budgets', key: 'navBudgets', short: 'navShortBudgets', icon: PiggyBank },
+  { href: '/savings', key: 'navSavings', short: 'navShortSavings', icon: Piggy },
+  { href: '/budgets', key: 'navBudgets', short: 'navShortBudgets', icon: Target },
   { href: '/installments', key: 'navInstallments', short: 'navShortInstallments', icon: Users },
 ];
 
@@ -74,12 +75,12 @@ export default function AppShell({ userName, children }) {
       </header>
 
       {/* Mobile bottom tab bar */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/90 dark:bg-[#120d1a]/95 backdrop-blur-md border-t border-slate-200/60 dark:border-white/10 grid grid-cols-6 pb-[env(safe-area-inset-bottom)]">
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/90 dark:bg-[#120d1a]/95 backdrop-blur-md border-t border-slate-200/60 dark:border-white/10 grid grid-cols-7 pb-[env(safe-area-inset-bottom)]">
         {TABS.map(({ href, short, icon: Icon }) => (
           <Link
             key={href}
             href={href}
-            className={`flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium ${
+            className={`flex flex-col items-center gap-1 py-2.5 text-[9.5px] leading-tight font-medium ${
               isActive(href) ? 'text-violet-600 dark:text-violet-400' : 'text-slate-500 dark:text-slate-400'
             }`}
           >

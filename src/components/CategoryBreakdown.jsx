@@ -23,7 +23,7 @@ export default function CategoryBreakdown({ byCategory, categories }) {
         <ul className="space-y-3">
           {rows.map((r) => {
             const pct = total ? (r.amount / total) * 100 : 0;
-            const name = r.cat?.name || t('uncategorized');
+            const name = r.id === 'card_other' ? t('cardOtherCategory') : r.cat?.name || t('uncategorized');
             return (
               <li key={r.id} title={`${name}: ${formatCurrency(r.amount)} (${pct.toFixed(1)}%)`}>
                 <div className="flex items-baseline justify-between gap-3 text-sm mb-1">

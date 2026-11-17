@@ -1,18 +1,19 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import { Plus, Pencil, Trash2, Loader2, CreditCard, Landmark, Wallet, ChevronDown } from 'lucide-react';
-import { createAccount, updateAccount, deleteAccount } from '@/actions/finance';
+import { Plus, Pencil, Trash2, Loader2, CreditCard, Landmark, Wallet, ChevronDown, Check, Undo2, Receipt } from 'lucide-react';
+import { createAccount, updateAccount, deleteAccount, setCardBillAmount, setCardBillPaid } from '@/actions/finance';
 import { formatCurrency } from '@/utils/currency';
 import { categoryColor, COLOR_KEYS } from '@/lib/palette';
 import { useLocale } from './LocaleProvider';
 import Modal from './Modal';
 import CategoryDot from './CategoryDot';
+import StatusPill from './StatusPill';
 import { card, cardTitle, input, label, primaryBtn, ghostBtn } from './ui';
 
 const TYPE_ICON = { credit_card: CreditCard, bank: Landmark, cash: Wallet };
 
-function AccountForm({ account, defaultType, onClose }) {
+function AccountForm({ account, defaultType, incomes = [], onClose }) {
   const { t, dark } = useLocale();
   const [form, setForm] = useState({
     name: account?.name || '',
@@ -21,6 +22,7 @@ function AccountForm({ account, defaultType, onClose }) {
     closing_day: account?.closing_day || '',
     due_day: account?.due_day || '',
     credit_limit: account?.credit_limit ? String(account.credit_limit).replace('.', ',') : '',
+    pay_with_id: account?.pay_with_id || '',
   });
   const [saving, setSaving] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -30,8 +32,9 @@ function AccountForm({ account, defaultType, onClose }) {
     e.preventDefault();
     setSaving(true);
     try {
-      if (account) await updateAccount(account.id, form);
-      else await createAccount(form);
+      const payload = { ...form, pay_with_id: form.pay_with_id || null };
+      if (account) await updateAccount(account.id, payload);
+      else await createAccount(payload);
       onClose();
     } catch {
       alert(t('errorSaving'));
@@ -62,9 +65,16 @@ function AccountForm({ account, defaultType, onClose }) {
               <label className={label}>{t('dueDay')}</label>
               <input className={input} type="number" min={1} max={31} value={form.due_day} onChange={set('due_day')} />
             </div>
-            <div className="col-span-2">
+            <div className="col-span-2 sm:col-span-1">
               <label className={label}>{t('creditLimit')}</label>
               <input className={input} inputMode="decimal" placeholder="0,00" pattern="[0-9]+([.,][0-9]{1,2})?" value={form.credit_limit} onChange={set('credit_limit')} />
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <label className={label}>{t('payWith')}</label>
+              <select className={input} value={form.pay_with_id} onChange={set('pay_with_id')}>
+                <option value="">{t('payWithNone')}</option>
+                {incomes.map((i) => <option key={i.id} value={i.id}>{i.name} (dia {i.due_day})</option>)}
+              </select>
             </div>
           </>
         )}
@@ -98,14 +108,27 @@ function Actions({ account, onEdit }) {
   );
 }
 
-function CardBill({ bill, categories, onEdit }) {
+function CardBill({ bill, categories, incomes, onEdit }) {
   const { t, lang, dark } = useLocale();
   const [showAll, setShowAll] = useState(false);
-  const { card: c, total, items, dueDate } = bill;
+  const [busy, setBusy] = useState(false);
+  const { card: c, total, items, dueDate, closeDate, startDate, status, manualAmount, other, purchasesTotal, month } = bill;
   const catById = Object.fromEntries(categories.map((x) => [x.id, x]));
+  const payWith = incomes.find((i) => i.id === c.pay_with_id);
   const pct = c.credit_limit ? Math.round((total / c.credit_limit) * 100) : null;
-  const fmtDay = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' });
+  const fmtDay = (d) => new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${d}T12:00:00`));
   const shown = showAll ? items : items.slice(0, 5);
+
+  const run = async (fn) => {
+    setBusy(true);
+    try { await fn(); } catch { alert(t('errorSaving')); }
+    setBusy(false);
+  };
+  const editAmount = () => {
+    const v = prompt(t('billAmountPrompt'), manualAmount != null ? String(manualAmount).replace('.', ',') : '');
+    if (v === null) return;
+    run(() => setCardBillAmount(c.id, month, v.trim()));
+  };
 
   return (
     <div className={`${card} p-5`}>
@@ -116,22 +139,47 @@ function CardBill({ bill, categories, onEdit }) {
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-slate-800 dark:text-white truncate">{c.name}</p>
           <p className="text-xs text-slate-500 dark:text-slate-400">
-            {t('cardBill')}{dueDate ? ` · ${t('billDue', { date: fmtDay.format(new Date(`${dueDate}T12:00:00`)) })}` : ''}
+            {dueDate ? t('dueOn', { date: fmtDay(dueDate) }) : t('cardBill')}
+            {closeDate ? ` · ${t('closesOn', { date: fmtDay(closeDate) })}` : ''}
           </p>
         </div>
         <Actions account={c} onEdit={onEdit} />
       </div>
-      <p className="text-2xl font-bold text-slate-800 dark:text-white tabular-nums mt-3">{formatCurrency(total)}</p>
+
+      <div className="flex items-center justify-between gap-2 mt-3">
+        <p className="text-2xl font-bold text-slate-800 dark:text-white tabular-nums">{formatCurrency(total)}</p>
+        <StatusPill status={status} />
+      </div>
+      <p className="text-xs text-slate-500 dark:text-slate-400">
+        {manualAmount != null ? t('billTyped') : t('billFromPurchases')}
+        {closeDate && startDate ? ` · ${t('billWindow', { start: fmtDay(startDate), end: fmtDay(closeDate) })}` : ''}
+      </p>
+      {payWith && <p className="text-xs text-violet-600 dark:text-violet-400 mt-0.5">{t('paidWithLabel', { name: payWith.name })}</p>}
+
       {pct !== null && (
         <>
-          <div className="h-2 mt-2 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
+          <div className="h-2 mt-3 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${Math.min(100, pct)}%`, background: pct > 90 ? '#d03b3b' : pct >= 70 ? '#fab219' : categoryColor(c.color, dark) }} />
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('limitUsed', { pct })} · {formatCurrency(c.credit_limit)}</p>
         </>
       )}
+
+      <div className="flex flex-wrap gap-2 mt-4">
+        <button className={`${ghostBtn} py-1.5`} onClick={editAmount} disabled={busy}><Receipt className="w-4 h-4" />{t('setBillAmount')}</button>
+        {status === 'paid' ? (
+          <button className={`${ghostBtn} py-1.5`} onClick={() => run(() => setCardBillPaid(c.id, month, false))} disabled={busy}>
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}{t('undoPaid')}
+          </button>
+        ) : (
+          <button className={`${primaryBtn} py-1.5 px-3 text-sm`} onClick={() => run(() => setCardBillPaid(c.id, month, true))} disabled={busy}>
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}{t('markBillPaid')}
+          </button>
+        )}
+      </div>
+
       <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mt-4 mb-1">{t('mainSpendings')}</h4>
-      {items.length === 0 ? (
+      {items.length === 0 && other === 0 ? (
         <p className="text-sm text-slate-400 dark:text-slate-500 py-2">{t('noCardSpending')}</p>
       ) : (
         <ul className="divide-y divide-slate-100 dark:divide-white/5">
@@ -139,10 +187,17 @@ function CardBill({ bill, categories, onEdit }) {
             <li key={tx.id} className="flex items-center gap-2 py-2 text-sm">
               <CategoryDot color={catById[tx.category_id]?.color || 'gray'} />
               <span className="flex-1 min-w-0 truncate text-slate-700 dark:text-slate-200">{tx.description}</span>
-              <span className="text-xs text-slate-400">{fmtDay.format(new Date(`${tx.date}T12:00:00`))}</span>
+              <span className="text-xs text-slate-400">{fmtDay(tx.date)}</span>
               <span className="tabular-nums font-medium text-slate-800 dark:text-slate-100 w-24 text-right">{formatCurrency(tx.amount)}</span>
             </li>
           ))}
+          {other > 0 && (
+            <li className="flex items-center gap-2 py-2 text-sm">
+              <CategoryDot color="gray" />
+              <span className="flex-1 min-w-0 truncate text-slate-500 dark:text-slate-400 italic">{t('otherCardSpending')}</span>
+              <span className="tabular-nums font-medium text-slate-600 dark:text-slate-300 w-24 text-right">{formatCurrency(other)}</span>
+            </li>
+          )}
         </ul>
       )}
       {items.length > 5 && (
@@ -154,7 +209,7 @@ function CardBill({ bill, categories, onEdit }) {
   );
 }
 
-export default function AccountsView({ cards, others, categories }) {
+export default function AccountsView({ cards, others, categories, incomes = [] }) {
   const { t, dark } = useLocale();
   const [editing, setEditing] = useState(null); // {type} for new, account for edit
   const close = useCallback(() => setEditing(null), []);
@@ -170,7 +225,7 @@ export default function AccountsView({ cards, others, categories }) {
           <div className={`${card} p-8 text-center text-sm text-slate-500 dark:text-slate-400`}>{t('noCards')}</div>
         ) : (
           <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {cards.map((b) => <CardBill key={b.card.id} bill={b} categories={categories} onEdit={setEditing} />)}
+            {cards.map((b) => <CardBill key={b.card.id} bill={b} categories={categories} incomes={incomes} onEdit={setEditing} />)}
           </div>
         )}
       </section>
@@ -213,7 +268,7 @@ export default function AccountsView({ cards, others, categories }) {
         )}
       </section>
 
-      {editing && <AccountForm account={editing.id ? editing : null} defaultType={editing.type} onClose={close} />}
+      {editing && <AccountForm account={editing.id ? editing : null} defaultType={editing.type} incomes={incomes} onClose={close} />}
     </div>
   );
 }
