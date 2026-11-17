@@ -39,6 +39,8 @@ export const updateGoal = wrap(actions.updateGoal);
 export const deleteGoal = wrap(actions.deleteGoal);
 export const addSavingsEntry = wrap(actions.addSavingsEntry);
 export const deleteSavingsEntry = wrap(actions.deleteSavingsEntry);
+export const setCarryover = wrap(actions.setCarryover);
+export const removeCarryover = wrap(actions.removeCarryover);
 
 // Message for an alert(): the setup hint for database permission/table problems, else the reason.
 export function errorMessage(t, err) {

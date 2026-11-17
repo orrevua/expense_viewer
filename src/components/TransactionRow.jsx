@@ -20,6 +20,7 @@ export default function TransactionRow({ tx, category, account, threshold, onEdi
         <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate flex items-center gap-2">
           <span className="truncate">{tx.description}</span>
           {isMajor && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-slate-800 text-white dark:bg-white dark:text-slate-900">{t('major')}</span>}
+          {tx.payment_method === 'carryover' && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300">{t('carryBadge')}</span>}
           {tx.recurring_id && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">{t('navRecurring')}</span>}
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-400 truncate">

@@ -64,7 +64,7 @@ export default function OverviewView({ data }) {
           <div className={`${card} p-5`}>
             <CardHeader title={t('cardsOverview')} href={`/accounts${qs}`} />
             {cards.length === 0 ? (
-              <p className="text-sm text-slate-400 dark:text-slate-500 py-4">{t('noCards')}</p>
+              <p className="text-sm text-slate-400 dark:text-slate-500 py-4">{t(data.accounts.some((a) => a.type === 'credit_card') ? 'noBillsThisMonth' : 'noCards')}</p>
             ) : (
               <ul className="space-y-4">
                 {cards.map(({ card: c, total, items, dueDate, status }) => {
