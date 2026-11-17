@@ -4,6 +4,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/utils/currency';
 import { useLocale } from './LocaleProvider';
 import CategoryDot from './CategoryDot';
+import { billDueMonth, monthLabel } from '@/utils/month';
 
 export default function TransactionRow({ tx, category, account, threshold, onEdit, onDelete, compact = false }) {
   const { t, lang } = useLocale();
@@ -22,7 +23,7 @@ export default function TransactionRow({ tx, category, account, threshold, onEdi
           {tx.recurring_id && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">{t('navRecurring')}</span>}
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-          {category?.name || t('uncategorized')} · {account ? account.name : t(`pm_${tx.payment_method}`)}{compact ? ` · ${dateLabel}` : ''}
+          {category?.name || t('uncategorized')} · {account ? account.name : t(`pm_${tx.payment_method}`)}{account?.type === 'credit_card' && account.closing_day ? ` · ${t('cardBill')} ${monthLabel(billDueMonth(tx.date, account.closing_day, account.due_day), lang, { month: 'short' }).replace('.', '')}` : ''}{compact ? ` · ${dateLabel}` : ''}
           {tx.notes && !compact ? ` · ${tx.notes}` : ''}
         </p>
       </div>

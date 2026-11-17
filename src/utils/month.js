@@ -59,3 +59,25 @@ export function billMonthFor(isoDate, closingDay) {
   if (!closingDay) return key;
   return Number(isoDate.slice(8, 10)) > closingDay ? shiftMonth(key, 1) : key;
 }
+
+// Month whose bill a purchase belongs to, identified by the month the bill is DUE.
+// e.g. closes 29 / due 15: purchase 10/Nov -> closes Nov -> due Dec.
+//      closes 4 / due 11:  purchase 3/Nov -> due Nov; purchase 5/Nov -> due Dec.
+export function billDueMonth(isoDate, closingDay, dueDay) {
+  const closeMonth = billMonthFor(isoDate, closingDay);
+  return closingDay && dueDay && dueDay <= closingDay ? shiftMonth(closeMonth, 1) : closeMonth;
+}
+
+// Purchase window and key dates of the bill due in `dueMonthKey`.
+export function billWindow(dueMonthKey, closingDay, dueDay) {
+  const closeMonth = closingDay && dueDay && dueDay <= closingDay ? shiftMonth(dueMonthKey, -1) : dueMonthKey;
+  if (!closingDay) {
+    return { closeDate: null, startDate: `${closeMonth}-01`, dueDate: dueDay ? dueDate(dueMonthKey, dueDay) : null };
+  }
+  const closeDate = dueDate(closeMonth, closingDay);
+  const prevClose = dueDate(shiftMonth(closeMonth, -1), closingDay);
+  const start = new Date(`${prevClose}T12:00:00`);
+  start.setDate(start.getDate() + 1);
+  const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
+  return { closeDate, startDate, dueDate: dueDay ? dueDate(dueMonthKey, dueDay) : null };
+}

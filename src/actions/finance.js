@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { getSessionUser } from '@/actions/auth';
 import { COLOR_KEYS } from '@/lib/palette';
-import { monthRange, normalizeMonth, shiftMonth, toViewerMonth, isMonthKey, currentMonthKey, billMonthFor, dueDate } from '@/utils/month';
+import { monthRange, normalizeMonth, shiftMonth, toViewerMonth, isMonthKey, currentMonthKey, billDueMonth, billWindow, dueDate, todayISO } from '@/utils/month';
 
 const KINDS = ['expense', 'income'];
 const PAYMENT_METHODS = ['pix', 'credit', 'debit', 'cash', 'transfer', 'boleto', 'other'];
@@ -33,9 +33,13 @@ function isMissingTable(error) {
   return error.code === '42P01' || error.code === '42703' || error.code === 'PGRST204' || error.code === 'PGRST205' || /does not exist|Could not find the table/i.test(error.message || '');
 }
 
+function isRlsBlocked(error) {
+  return error.code === '42501' || /row-level security/i.test(error.message || '');
+}
+
 function check(error) {
   if (!error) return;
-  if (isMissingTable(error)) throw new SetupRequiredError('setup');
+  if (isMissingTable(error) || isRlsBlocked(error)) throw new SetupRequiredError('setup');
   throw new Error(error.message);
 }
 
@@ -279,16 +283,26 @@ function cleanAccount(input) {
   };
 }
 
+async function assertIncome(userId, id) {
+  if (!id) return null;
+  const { data } = await supabase.from('recurring_expenses').select('id').eq('id', id).eq('user_id', userId).eq('kind', 'income').maybeSingle();
+  return data ? id : null;
+}
+
 export async function createAccount(input) {
   const user = await requireUser();
-  const { error } = await supabase.from('accounts').insert([{ ...cleanAccount(input), user_id: user.id }]);
+  const row = cleanAccount(input);
+  row.pay_with_id = row.type === 'credit_card' ? await assertIncome(user.id, input.pay_with_id) : null;
+  const { error } = await supabase.from('accounts').insert([{ ...row, user_id: user.id }]);
   check(error);
   revalidate();
 }
 
 export async function updateAccount(id, input) {
   const user = await requireUser();
-  const { error } = await supabase.from('accounts').update(cleanAccount(input)).eq('id', id).eq('user_id', user.id);
+  const row = cleanAccount(input);
+  row.pay_with_id = row.type === 'credit_card' ? await assertIncome(user.id, input.pay_with_id) : null;
+  const { error } = await supabase.from('accounts').update(row).eq('id', id).eq('user_id', user.id);
   check(error);
   revalidate();
 }
@@ -322,7 +336,7 @@ export async function setMajorThreshold(value) {
 async function loadRecurring(userId) {
   const { data, error } = await supabase.from('recurring_expenses').select('*').eq('user_id', userId).order('due_day', { ascending: true });
   check(error);
-  return (data || []).map((r) => ({ ...r, amount: Number(r.amount) }));
+  return (data || []).map((r) => ({ ...r, kind: r.kind || 'expense', amount: Number(r.amount) }));
 }
 
 function activeIn(r, month) {
@@ -337,6 +351,7 @@ function cleanRecurring(input) {
   return {
     name,
     amount,
+    kind: KINDS.includes(input.kind) ? input.kind : 'expense',
     due_day: day(input.due_day, 10),
     payment_method: PAYMENT_METHODS.includes(input.payment_method) ? input.payment_method : 'pix',
   };
@@ -395,7 +410,7 @@ export async function markRecurringPaid(id, month, amountInput) {
   if (!amount) throw new Error('Invalid amount.');
   const { error: insertError } = await supabase.from('transactions').insert([{
     user_id: user.id,
-    kind: 'expense',
+    kind: r.kind || 'expense',
     amount,
     description: r.name,
     category_id: r.category_id,
@@ -438,16 +453,74 @@ function summarizeRecurring(items) {
   return out;
 }
 
-// Credit-card bills: purchases after the closing day go to the next month's bill.
-function cardBills(accounts, transactions, month) {
+// ---------- Credit-card bills ----------
+// A bill is identified by the month it is DUE. Its total is the amount you typed in
+// (from the bank app) or, if you didn't, the sum of the purchases you logged on the card.
+
+async function loadCardBills(userId, months) {
+  const { data, error } = await supabase.from('card_bills').select('*').eq('user_id', userId).in('month', months);
+  check(error);
+  return (data || []).map((b) => ({ ...b, amount: b.amount == null ? null : Number(b.amount) }));
+}
+
+async function assertCard(userId, accountId) {
+  const { data } = await supabase.from('accounts').select('id').eq('id', accountId).eq('user_id', userId).eq('type', 'credit_card').maybeSingle();
+  if (!data) throw new Error('Card not found.');
+}
+
+async function upsertBill(userId, accountId, month, fields) {
+  const { data: existing, error } = await supabase.from('card_bills').select('id').eq('account_id', accountId).eq('month', month).maybeSingle();
+  check(error);
+  if (existing) {
+    const { error: e } = await supabase.from('card_bills').update(fields).eq('id', existing.id);
+    check(e);
+  } else {
+    const { error: e } = await supabase.from('card_bills').insert([{ user_id: userId, account_id: accountId, month, ...fields }]);
+    check(e);
+  }
+}
+
+// amount empty/null -> go back to "sum of purchases"
+export async function setCardBillAmount(accountId, month, amountInput) {
+  const user = await requireUser();
+  if (!isMonthKey(month)) throw new Error('Invalid month.');
+  await assertCard(user.id, accountId);
+  const amount = amountInput === null || amountInput === '' || amountInput === undefined ? null : money(amountInput);
+  if (amountInput && amount === null) throw new Error('Invalid amount.');
+  await upsertBill(user.id, accountId, month, { amount });
+  revalidate();
+}
+
+export async function setCardBillPaid(accountId, month, paid) {
+  const user = await requireUser();
+  if (!isMonthKey(month)) throw new Error('Invalid month.');
+  await assertCard(user.id, accountId);
+  await upsertBill(user.id, accountId, month, { paid_at: paid ? todayISO() : null });
+  revalidate();
+}
+
+function cardBills(accounts, transactions, month, billRows) {
+  const today = todayISO();
   return accounts.filter((a) => a.type === 'credit_card').map((card) => {
     const items = transactions
-      .filter((t) => t.account_id === card.id && t.kind === 'expense' && billMonthFor(t.date, card.closing_day) === month)
+      .filter((t) => t.account_id === card.id && t.kind === 'expense' && billDueMonth(t.date, card.closing_day, card.due_day) === month)
       .sort((a, b) => b.amount - a.amount);
-    const total = sum(items);
-    // The bill closes in `month`; if the due day is not after the closing day, it is due the next month.
-    const dueMonth = card.closing_day && card.due_day && card.due_day <= card.closing_day ? shiftMonth(month, 1) : month;
-    return { card, total, items, dueDate: card.due_day ? dueDate(dueMonth, card.due_day) : null };
+    const purchasesTotal = sum(items);
+    const row = billRows.find((b) => b.account_id === card.id && b.month === month);
+    const manualAmount = row?.amount ?? null;
+    const total = manualAmount ?? purchasesTotal;
+    const other = manualAmount != null ? Math.max(0, Math.round((manualAmount - purchasesTotal) * 100) / 100) : 0;
+    const win = billWindow(month, card.closing_day, card.due_day);
+    let status;
+    if (row?.paid_at) status = 'paid';
+    else if (win.closeDate && today <= win.closeDate) status = 'open';
+    else if (win.dueDate && today > win.dueDate) status = 'late';
+    else status = 'closed';
+    return {
+      card, month, items, purchasesTotal, manualAmount, total, other, status,
+      paidAt: row?.paid_at || null,
+      dueDate: win.dueDate, closeDate: win.closeDate, startDate: win.startDate,
+    };
   });
 }
 
@@ -472,6 +545,96 @@ function sizeSplit(expenses, threshold) {
     minor: { total: sum(minor), count: minor.length },
     top: [...expenses].sort((a, b) => b.amount - a.amount).slice(0, 5),
   };
+}
+
+// ---------- Savings plan ----------
+
+async function loadGoals(userId) {
+  const { data, error } = await supabase.from('savings_goals').select('*').eq('user_id', userId).order('created_at', { ascending: true });
+  check(error);
+  return (data || []).map((g) => ({ ...g, target_amount: Number(g.target_amount), monthly_amount: Number(g.monthly_amount) }));
+}
+
+async function loadSavingsEntries(userId) {
+  const { data, error } = await supabase.from('savings_entries').select('*').eq('user_id', userId).order('date', { ascending: false });
+  check(error);
+  return (data || []).map((e) => ({ ...e, amount: Number(e.amount) }));
+}
+
+function cleanGoal(input) {
+  const name = str(input.name, 80);
+  const target_amount = money(input.target_amount);
+  if (!name) throw new Error('Name is required.');
+  if (!target_amount) throw new Error('Invalid amount.');
+  return {
+    name,
+    target_amount,
+    monthly_amount: money(input.monthly_amount) || 0,
+    target_month: isMonthKey(input.target_month) ? input.target_month : null,
+    color: COLOR_KEYS.includes(input.color) ? input.color : 'aqua',
+  };
+}
+
+export async function createGoal(input) {
+  const user = await requireUser();
+  const { error } = await supabase.from('savings_goals').insert([{ ...cleanGoal(input), user_id: user.id }]);
+  check(error);
+  revalidate();
+}
+
+export async function updateGoal(id, input) {
+  const user = await requireUser();
+  const { error } = await supabase.from('savings_goals').update(cleanGoal(input)).eq('id', id).eq('user_id', user.id);
+  check(error);
+  revalidate();
+}
+
+export async function deleteGoal(id) {
+  const user = await requireUser();
+  const { error } = await supabase.from('savings_goals').delete().eq('id', id).eq('user_id', user.id);
+  check(error);
+  revalidate();
+}
+
+// amount > 0 saves, amount < 0 withdraws
+export async function addSavingsEntry(goalId, amountInput, withdraw = false, note = '') {
+  const user = await requireUser();
+  const { data: goal } = await supabase.from('savings_goals').select('id').eq('id', goalId).eq('user_id', user.id).maybeSingle();
+  if (!goal) throw new Error('Goal not found.');
+  const amount = money(amountInput);
+  if (!amount) throw new Error('Invalid amount.');
+  const { error } = await supabase.from('savings_entries').insert([{
+    user_id: user.id, goal_id: goalId, amount: withdraw ? -amount : amount, date: todayISO(), note: str(note, 200) || null,
+  }]);
+  check(error);
+  revalidate();
+}
+
+export async function deleteSavingsEntry(id) {
+  const user = await requireUser();
+  const { error } = await supabase.from('savings_entries').delete().eq('id', id).eq('user_id', user.id);
+  check(error);
+  revalidate();
+}
+
+function goalsWithProgress(goals, entries, month) {
+  const thisMonth = currentMonthKey();
+  return goals.map((g) => {
+    const list = entries.filter((e) => e.goal_id === g.id);
+    const saved = Math.round(list.reduce((a, e) => a + e.amount, 0) * 100) / 100;
+    const savedThisMonth = Math.round(list.filter((e) => e.date.startsWith(month)).reduce((a, e) => a + e.amount, 0) * 100) / 100;
+    const remaining = Math.max(0, g.target_amount - saved);
+    let monthsLeft = null;
+    let neededPerMonth = null;
+    if (g.target_month) {
+      const [ty, tm] = g.target_month.split('-').map(Number);
+      const [cy, cm] = thisMonth.split('-').map(Number);
+      monthsLeft = Math.max(1, (ty - cy) * 12 + (tm - cm) + 1);
+      neededPerMonth = Math.ceil((remaining / monthsLeft) * 100) / 100;
+    }
+    const monthsToGoal = g.monthly_amount > 0 ? Math.ceil(remaining / g.monthly_amount) : null;
+    return { ...g, saved, savedThisMonth, remaining, monthsLeft, neededPerMonth, monthsToGoal, entries: list.slice(0, 10) };
+  });
 }
 
 // ---------- Installments backup ----------
@@ -499,45 +662,139 @@ function sum(list) {
   return Math.round(list.reduce((acc, t) => acc + t.amount, 0) * 100) / 100;
 }
 
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+
+// Everything the month view needs, on a "when the money moves" basis:
+// card purchases count in the month their bill is due.
+async function loadMonthModel(userId, month, { trendMonths = 1 } = {}) {
+  const months = Array.from({ length: trendMonths }, (_, i) => shiftMonth(month, i - trendMonths + 1));
+  const billMonths = [...months, shiftMonth(month, 1)];
+  const { start } = monthRange(shiftMonth(months[0], -2));
+  const { end } = monthRange(shiftMonth(month, 1));
+
+  const [categories, accounts, transactions, recurring, billRows, installmentBills, goals, entries] = await Promise.all([
+    loadCategories(userId),
+    loadAccounts(userId),
+    loadTransactions(userId, start, end),
+    loadRecurring(userId),
+    loadCardBills(userId, billMonths),
+    loadInstallmentBills(userId, months),
+    loadGoals(userId),
+    loadSavingsEntries(userId),
+  ]);
+
+  const cardIds = new Set(accounts.filter((a) => a.type === 'credit_card').map((a) => a.id));
+  const billsByMonth = Object.fromEntries(billMonths.map((m) => [m, cardBills(accounts, transactions, m, billRows)]));
+
+  const monthTotals = (m) => {
+    const inM = transactions.filter((t) => t.date.startsWith(m));
+    const nonCard = inM.filter((t) => t.kind === 'expense' && !cardIds.has(t.account_id));
+    const bills = billsByMonth[m] || [];
+    return {
+      income: sum(inM.filter((t) => t.kind === 'income')),
+      nonCard,
+      bills,
+      expense: round2(sum(nonCard) + bills.reduce((a, b) => a + b.total, 0)),
+      installments: installmentBills[m] || 0,
+    };
+  };
+
+  return { months, categories, accounts, transactions, recurring, billsByMonth, installmentBills, goals, entries, cardIds, monthTotals };
+}
+
+function buildCashFlow(model, month) {
+  const { recurring, transactions, billsByMonth, installmentBills, goals, entries, cardIds, accounts } = model;
+  const items = recurringStatus(recurring, transactions, month);
+  const incomes = items.filter((i) => i.kind === 'income');
+  const fixed = items.filter((i) => i.kind !== 'income');
+  const bills = billsByMonth[month] || [];
+  const inM = transactions.filter((t) => t.date.startsWith(month));
+  const events = [];
+
+  for (const i of incomes) {
+    events.push({ id: `r-${i.id}`, type: 'income', day: i.due_day, date: i.dueDate, label: i.name, amount: i.status === 'paid' ? i.paidAmount : i.amount, status: i.status, kind: 'income' });
+  }
+  for (const t of inM.filter((x) => x.kind === 'income' && !x.recurring_id)) {
+    events.push({ id: `t-${t.id}`, type: 'income', day: Number(t.date.slice(8, 10)), date: t.date, label: t.description, amount: t.amount, status: 'paid', kind: 'income' });
+  }
+  for (const f of fixed) {
+    const onCard = f.account_id && cardIds.has(f.account_id);
+    if (onCard) continue; // shows up inside the card bill
+    events.push({ id: `r-${f.id}`, type: 'fixed', day: f.due_day, date: f.dueDate, label: f.name, amount: f.status === 'paid' ? f.paidAmount : f.amount, status: f.status, kind: 'expense' });
+  }
+  for (const b of bills) {
+    if (!b.total && b.status !== 'paid') continue;
+    const payWith = recurring.find((r) => r.id === b.card.pay_with_id);
+    events.push({ id: `c-${b.card.id}`, type: 'card', day: b.dueDate ? Number(b.dueDate.slice(8, 10)) : 28, date: b.dueDate, label: b.card.name, amount: b.total, status: b.status, kind: 'expense', payWith: payWith?.name || null, color: b.card.color });
+  }
+  const planned = round2(goals.reduce((a, g) => a + g.monthly_amount, 0));
+  const savedThisMonth = round2(entries.filter((e) => e.date.startsWith(month)).reduce((a, e) => a + e.amount, 0));
+  if (planned > 0 || savedThisMonth !== 0) {
+    const firstIncomeDay = incomes.length ? Math.min(...incomes.map((i) => i.due_day)) : 1;
+    events.push({ id: 'savings', type: 'savings', day: firstIncomeDay, date: dueDate(month, firstIncomeDay), label: 'savings', amount: Math.max(planned, savedThisMonth), done: savedThisMonth, planned, status: savedThisMonth >= planned && planned > 0 ? 'paid' : 'pending', kind: 'expense' });
+  }
+  const daily = sum(inM.filter((t) => t.kind === 'expense' && !t.recurring_id && !cardIds.has(t.account_id)));
+  if (daily > 0) events.push({ id: 'daily', type: 'daily', day: 32, label: 'daily', amount: daily, status: 'paid', kind: 'expense' });
+  const inst = installmentBills[month] || 0;
+  if (inst > 0) events.push({ id: 'installments', type: 'installments', day: 33, label: 'installments', amount: inst, status: 'pending', kind: 'expense' });
+
+  const order = { income: 0, savings: 1, card: 2, fixed: 3, daily: 4, installments: 5 };
+  events.sort((a, b) => a.day - b.day || order[a.type] - order[b.type]);
+  let running = 0;
+  for (const e of events) {
+    running = round2(running + (e.kind === 'income' ? e.amount : -e.amount));
+    e.balance = running;
+  }
+  const totalIn = round2(events.filter((e) => e.kind === 'income').reduce((a, e) => a + e.amount, 0));
+  const totalSavings = round2(events.filter((e) => e.type === 'savings').reduce((a, e) => a + e.amount, 0));
+  const totalOut = round2(events.filter((e) => e.kind === 'expense' && e.type !== 'savings').reduce((a, e) => a + e.amount, 0));
+
+  // Each fixed income covers the cards set to be paid with it: the first bill due on/after the income day.
+  const coverage = incomes.map((inc) => {
+    const linked = accounts.filter((a) => a.type === 'credit_card' && a.pay_with_id === inc.id).map((card) => {
+      const billMonth = card.due_day && card.due_day < inc.due_day ? shiftMonth(month, 1) : month;
+      const bill = (billsByMonth[billMonth] || []).find((b) => b.card.id === card.id);
+      return bill ? { card, total: bill.total, status: bill.status, dueDate: bill.dueDate } : null;
+    }).filter(Boolean);
+    const amount = inc.status === 'paid' ? inc.paidAmount : inc.amount;
+    const billsTotal = round2(linked.reduce((a, l) => a + l.total, 0));
+    return { income: inc, amount, date: inc.dueDate, bills: linked, billsTotal, left: round2(amount - billsTotal) };
+  });
+
+  return { events, totals: { in: totalIn, out: totalOut, savings: totalSavings, left: round2(totalIn - totalOut - totalSavings) }, coverage, recurringItems: items };
+}
+
 export async function getOverviewData(monthParam) {
   return guarded(async () => {
     const user = await requireUser();
     const month = normalizeMonth(monthParam);
-    const months = Array.from({ length: 6 }, (_, i) => shiftMonth(month, i - 5));
-    const { start } = monthRange(months[0]);
-    const { end } = monthRange(shiftMonth(month, 1)); // next month too: card purchases after closing day
-
-    const [categories, accounts, transactions, budgets, bills, recurring, threshold] = await Promise.all([
-      loadCategories(user.id),
-      loadAccounts(user.id),
-      loadTransactions(user.id, start, end),
+    const [model, budgets, threshold] = await Promise.all([
+      loadMonthModel(user.id, month, { trendMonths: 6 }),
       loadBudgets(user.id),
-      loadInstallmentBills(user.id, months),
-      loadRecurring(user.id),
       loadThreshold(user.id),
     ]);
+    const { categories, accounts, months, monthTotals } = model;
+    const cur = monthTotals(month);
 
-    const inMonth = transactions.filter((t) => t.date.startsWith(month));
-    const expenses = inMonth.filter((t) => t.kind === 'expense');
-    const income = inMonth.filter((t) => t.kind === 'income');
-
+    // What was spent this month (cash basis): non-card expenses + purchases on the bills due this month
+    const spentItems = [...cur.nonCard, ...cur.bills.flatMap((b) => b.items)];
     const byCategory = {};
-    for (const t of expenses) {
+    for (const t of spentItems) {
       const key = t.category_id || 'none';
       byCategory[key] = (byCategory[key] || 0) + t.amount;
     }
+    const cardOther = round2(cur.bills.reduce((a, b) => a + b.other, 0));
+    if (cardOther > 0) byCategory.card_other = cardOther;
 
     const trend = months.map((m) => {
-      const list = transactions.filter((t) => t.date.startsWith(m));
-      return {
-        month: m,
-        expense: sum(list.filter((t) => t.kind === 'expense')),
-        income: sum(list.filter((t) => t.kind === 'income')),
-        installments: bills[m] || 0,
-      };
+      const t = monthTotals(m);
+      return { month: m, expense: t.expense, income: t.income, installments: t.installments };
     });
 
-    const recurringItems = recurringStatus(recurring, transactions, month);
+    const flow = buildCashFlow(model, month);
+    const fixedItems = flow.recurringItems.filter((i) => i.kind !== 'income');
 
     return {
       month,
@@ -546,15 +803,12 @@ export async function getOverviewData(monthParam) {
       budgets,
       byCategory,
       trend,
-      totals: {
-        expense: sum(expenses),
-        income: sum(income),
-        installments: bills[month] || 0,
-        count: inMonth.length,
-      },
-      recurring: { items: recurringItems, summary: summarizeRecurring(recurringItems) },
-      cards: cardBills(accounts, transactions, month),
-      size: sizeSplit(expenses, threshold),
+      flow,
+      totals: { expense: cur.expense, income: cur.income, installments: cur.installments },
+      recurring: { items: fixedItems, summary: summarizeRecurring(fixedItems) },
+      cards: cur.bills,
+      goals: goalsWithProgress(model.goals, model.entries, month),
+      size: sizeSplit(spentItems, threshold),
     };
   });
 }
@@ -585,8 +839,10 @@ export async function getRecurringData(monthParam) {
       loadRecurring(user.id),
       loadTransactions(user.id, start, end),
     ]);
-    const items = recurringStatus(recurring, transactions, month);
-    return { month, categories, accounts, items, summary: summarizeRecurring(items) };
+    const all = recurringStatus(recurring, transactions, month);
+    const items = all.filter((i) => i.kind !== 'income');
+    const incomes = all.filter((i) => i.kind === 'income');
+    return { month, categories, accounts, items, incomes, summary: summarizeRecurring(items), incomeSummary: summarizeRecurring(incomes) };
   });
 }
 
@@ -594,19 +850,56 @@ export async function getAccountsData(monthParam) {
   return guarded(async () => {
     const user = await requireUser();
     const month = normalizeMonth(monthParam);
-    const { start } = monthRange(shiftMonth(month, -1));
-    const { end } = monthRange(month);
-    const [categories, accounts, transactions] = await Promise.all([
-      loadCategories(user.id),
-      loadAccounts(user.id),
-      loadTransactions(user.id, start, end),
-    ]);
+    const model = await loadMonthModel(user.id, month);
+    const incomes = model.recurring.filter((r) => r.kind === 'income');
     return {
       month,
-      categories,
-      accounts,
-      cards: cardBills(accounts, transactions, month),
-      others: accountSummaries(accounts, transactions, month),
+      categories: model.categories,
+      accounts: model.accounts,
+      incomes,
+      cards: model.billsByMonth[month],
+      others: accountSummaries(model.accounts, model.transactions, month),
+    };
+  });
+}
+
+export async function getSavingsData(monthParam) {
+  return guarded(async () => {
+    const user = await requireUser();
+    const month = normalizeMonth(monthParam);
+    const model = await loadMonthModel(user.id, month, { trendMonths: 3 });
+    const flow = buildCashFlow(model, month);
+    const goals = goalsWithProgress(model.goals, model.entries, month);
+
+    const incomes = flow.recurringItems.filter((i) => i.kind === 'income');
+    const expectedIncome = round2(incomes.reduce((a, i) => a + i.amount, 0)) || flow.totals.in;
+    // Average of the last 3 months (cash basis) as the "cost of living", falling back to this month.
+    const history = model.months.map((m) => model.monthTotals(m)).map((t) => t.expense + t.installments).filter((v) => v > 0);
+    const avgSpending = history.length ? round2(history.reduce((a, v) => a + v, 0) / history.length) : flow.totals.out;
+    const fixedCost = round2(flow.recurringItems.filter((i) => i.kind !== 'income').reduce((a, i) => a + i.amount, 0));
+    const free = round2(expectedIncome - flow.totals.out);
+    const suggested = Math.max(0, Math.floor(Math.min(expectedIncome * 0.2, Math.max(0, free)) / 10) * 10);
+    const plannedMonthly = round2(goals.reduce((a, g) => a + g.monthly_amount, 0));
+    const savedThisMonth = round2(goals.reduce((a, g) => a + g.savedThisMonth, 0));
+    const totalSaved = round2(goals.reduce((a, g) => a + g.saved, 0));
+
+    return {
+      month,
+      goals,
+      plan: {
+        expectedIncome,
+        out: flow.totals.out,
+        free,
+        suggested,
+        twentyPct: round2(expectedIncome * 0.2),
+        plannedMonthly,
+        savedThisMonth,
+        totalSaved,
+        avgSpending,
+        fixedCost,
+        emergencyTarget: Math.ceil((avgSpending || fixedCost) * 6 / 100) * 100,
+        hasIncome: incomes.length > 0,
+      },
     };
   });
 }
