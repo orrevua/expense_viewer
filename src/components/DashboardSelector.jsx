@@ -17,7 +17,7 @@ export default function DashboardSelector({ dashboards, activeId }) {
     if (e.target.value === 'new') {
       setIsCreating(true);
     } else {
-      router.push(`/?dashboardId=${e.target.value}`);
+      router.push(`/installments?dashboardId=${e.target.value}`);
     }
   };
 
@@ -30,7 +30,7 @@ export default function DashboardSelector({ dashboards, activeId }) {
       const newSb = await createDashboard(newName, isFirst);
       setIsCreating(false);
       setNewName('');
-      router.push(`/?dashboardId=${newSb.id}`);
+      router.push(`/installments?dashboardId=${newSb.id}`);
     } catch (error) {
       alert("Error creating dashboard.");
     } finally {
@@ -54,9 +54,9 @@ export default function DashboardSelector({ dashboards, activeId }) {
         await deleteDashboard(activeId);
         const defaultDashboard = dashboards.find(d => d.is_default) || dashboards[0];
         if (defaultDashboard) {
-          router.push(`/?dashboardId=${defaultDashboard.id}`);
+          router.push(`/installments?dashboardId=${defaultDashboard.id}`);
         } else {
-          router.push(`/`);
+          router.push(`/installments`);
         }
       } catch (error) {
         alert("Error deleting dashboard.");

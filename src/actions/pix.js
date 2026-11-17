@@ -106,7 +106,7 @@ export async function recordPixPayment(dashboardId, month, amount, note = '') {
 
   if (error) throw new Error(error.message);
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return { success: true, payment: data };
 }
 
@@ -136,6 +136,6 @@ export async function deletePixPayment(paymentId) {
 
   if (error) throw new Error(error.message);
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return { success: true };
 }

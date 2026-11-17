@@ -314,7 +314,7 @@ export async function createDashboard(name, isDefault = false) {
   if (!user) throw new Error('Not authenticated');
   const { data, error } = await supabase.from('dashboards').insert([{ name, is_default: isDefault, user_id: user.id }]).select().single();
   if (error) throw new Error(error.message);
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return data;
 }
 
@@ -333,7 +333,7 @@ export async function deleteDashboard(dashboardId) {
   const { error } = await supabase.from('dashboards').delete().eq('id', dashboardId);
   if (error) throw new Error(error.message);
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return true;
 }
 
@@ -347,7 +347,7 @@ export async function setDefaultDashboard(dashboardId) {
   const { error } = await supabase.from('dashboards').update({ is_default: true }).eq('id', dashboardId).eq('user_id', user.id);
   if (error) throw new Error(error.message);
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return true;
 }
 
@@ -428,7 +428,7 @@ export async function addOneTimeExpense(dashboardId, expense) {
     { status: data.status, countInTotal: data.status !== 'paid' },
   );
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return data;
 }
 
@@ -478,7 +478,7 @@ export async function addInstallmentExpense(dashboardId, expense) {
     }
   }
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return data;
 }
 
@@ -560,7 +560,7 @@ export async function editInstallmentExpense(expenseId, updates) {
     await upsertMonthlyHistoryDetail(expense.dashboard_id, targetMonth, detail, { status: 'pending' });
   }
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return { ...expense, name: newName, total_amount: newTotalAmount, installments: newInstallments, installment_amount: newInstallmentAmount, paid_installments: newPaidInstallments, start_month: newStartMonth };
 }
 
@@ -602,7 +602,7 @@ export async function updateInstallment(expenseId, newPaidAmount, currentMonth, 
       }]);
     if (errHist) throw new Error(errHist.message);
   }
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return true;
 }
 
@@ -634,7 +634,7 @@ export async function toggleOneTimeExpenseStatus(expenseId, currentStatus) {
     { status: newStatus, countInTotal: newStatus !== 'paid' },
   );
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
 }
 
 export async function incrementInstallment(expenseId, currentPaid, totalInstallments) {
@@ -656,7 +656,7 @@ export async function incrementInstallment(expenseId, currentPaid, totalInstallm
   // Mark the `newPaid`-th installment as 'paid'
   await syncInstallmentHistoryDetail(expense.dashboard_id, expense, newPaid, true);
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
 }
 
 export async function decrementInstallment(expenseId, currentPaid, totalInstallments) {
@@ -678,7 +678,7 @@ export async function decrementInstallment(expenseId, currentPaid, totalInstallm
   // Mark the `currentPaid`-th installment as 'pending'
   await syncInstallmentHistoryDetail(expense.dashboard_id, expense, currentPaid, false);
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
 }
 
 export async function toggleMonthlyHistoryStatus(historyId, currentStatus) {
@@ -742,7 +742,7 @@ export async function toggleMonthlyHistoryStatus(historyId, currentStatus) {
     .eq('id', historyRecord.id);
   if (error) throw new Error(error.message);
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
 }
 
 // 6. Deletion Operations
@@ -794,7 +794,7 @@ export async function deleteOneTimeExpense(expenseId) {
     }
   }
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return true;
 }
 
@@ -850,6 +850,6 @@ export async function deleteInstallmentExpense(expenseId) {
     }
   }
 
-  revalidatePath('/');
+  revalidatePath('/', 'layout');
   return true;
 }

@@ -1,0 +1,6 @@
+export const card = 'bg-white/70 dark:bg-white/5 backdrop-blur-sm rounded-2xl shadow-sm border border-slate-200/60 dark:border-white/10';
+export const cardTitle = 'text-sm font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide';
+export const input = 'w-full px-3.5 py-2.5 bg-slate-50/80 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-400 transition-all text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500';
+export const label = 'block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5';
+export const primaryBtn = 'inline-flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-4 py-2.5 rounded-xl font-medium transition-all shadow-md shadow-violet-500/20 disabled:opacity-60';
+export const ghostBtn = 'inline-flex items-center justify-center gap-2 bg-white/80 dark:bg-white/10 hover:bg-white dark:hover:bg-white/20 border border-slate-200/60 dark:border-white/10 text-slate-700 dark:text-slate-200 px-3 py-2 rounded-xl text-sm font-medium transition-all';

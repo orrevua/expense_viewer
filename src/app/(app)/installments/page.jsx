@@ -3,23 +3,16 @@ import InstallmentCard from '@/components/InstallmentCard';
 import OneTimeExpense from '@/components/OneTimeExpense';
 import HistoryAccordion from '@/components/HistoryAccordion';
 import AddExpense from '@/components/AddExpense';
-import TopBar from '@/components/TopBar';
+import ShareButton from '@/components/ShareButton';
+import BackupButton from '@/components/BackupButton';
 import DashboardSelector from '@/components/DashboardSelector';
 import LocalizedHeading from '@/components/LocalizedHeading';
 import LocalizedParagraph from '@/components/LocalizedParagraph';
 import SpendingTrendChart from '@/components/SpendingTrendChart';
 import { getDashboardData, getDashboards } from '@/actions/dashboard';
-import { verifyAuth } from '@/actions/auth';
-import { redirect } from 'next/navigation';
 import { initialData } from '@/data/initialData';
 
-export default async function Home({ searchParams }) {
-  const isAuthenticated = await verifyAuth();
-
-  if (!isAuthenticated) {
-    redirect('/login');
-  }
-
+export default async function InstallmentsPage({ searchParams }) {
   let dashboards = [];
   try {
     dashboards = await getDashboards();
@@ -44,9 +37,14 @@ export default async function Home({ searchParams }) {
   const data = dashboardData || (dashboards.length === 0 ? initialData : { installmentExpenses: [], oneTimeExpenses: [], timeline: [], summary: { totalCurrentMonth: 0 } });
 
   return (
-    <main className="min-h-screen p-4 md:p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <TopBar activeDashboardId={activeDashboardId} />
+    <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <LocalizedHeading k="navInstallments" as="h1" className="text-2xl font-bold text-slate-800 dark:text-white">Installments</LocalizedHeading>
+          <div className="flex flex-wrap gap-2">
+            <BackupButton />
+            <ShareButton activeDashboardId={activeDashboardId} />
+          </div>
+        </div>
 
         <DashboardSelector dashboards={dashboards} activeId={activeDashboardId || ''} />
 
@@ -89,7 +87,6 @@ export default async function Home({ searchParams }) {
             </div>
           </section>
         </div>
-      </div>
-    </main>
+    </div>
   );
 }
