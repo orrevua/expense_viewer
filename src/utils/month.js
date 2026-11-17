@@ -41,3 +41,21 @@ export function todayISO() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+function daysIn(key) {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
+// ISO date for a given day in a month, clamped to the month length (e.g. day 31 in Feb).
+export function dueDate(key, dayOfMonth) {
+  const d = Math.min(Math.max(1, dayOfMonth || 1), daysIn(key));
+  return `${key}-${String(d).padStart(2, '0')}`;
+}
+
+// Month whose credit-card bill a purchase belongs to.
+export function billMonthFor(isoDate, closingDay) {
+  const key = isoDate.slice(0, 7);
+  if (!closingDay) return key;
+  return Number(isoDate.slice(8, 10)) > closingDay ? shiftMonth(key, 1) : key;
+}

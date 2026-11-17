@@ -17,7 +17,7 @@ export default async function OverviewPage({ searchParams }) {
     <>
       <PageHeader titleKey="navOverview">
         {result.ok && <MonthPicker month={result.month} />}
-        {result.ok && <AddTransactionButton categories={result.categories} month={result.month} />}
+        {result.ok && <AddTransactionButton categories={result.categories} accounts={result.accounts} month={result.month} />}
       </PageHeader>
       {result.ok ? <OverviewView data={result} /> : <LoadState result={result} />}
     </>

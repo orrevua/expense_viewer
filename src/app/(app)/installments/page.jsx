@@ -4,6 +4,7 @@ import OneTimeExpense from '@/components/OneTimeExpense';
 import HistoryAccordion from '@/components/HistoryAccordion';
 import AddExpense from '@/components/AddExpense';
 import ShareButton from '@/components/ShareButton';
+import BackupButton from '@/components/BackupButton';
 import DashboardSelector from '@/components/DashboardSelector';
 import LocalizedHeading from '@/components/LocalizedHeading';
 import LocalizedParagraph from '@/components/LocalizedParagraph';
@@ -39,7 +40,10 @@ export default async function InstallmentsPage({ searchParams }) {
     <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <LocalizedHeading k="navInstallments" as="h1" className="text-2xl font-bold text-slate-800 dark:text-white">Installments</LocalizedHeading>
-          <ShareButton activeDashboardId={activeDashboardId} />
+          <div className="flex flex-wrap gap-2">
+            <BackupButton />
+            <ShareButton activeDashboardId={activeDashboardId} />
+          </div>
         </div>
 
         <DashboardSelector dashboards={dashboards} activeId={activeDashboardId || ''} />

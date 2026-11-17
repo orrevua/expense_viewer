@@ -6,16 +6,20 @@ App web de financas pessoais para acompanhar **todos os seus gastos**: transacoe
 
 | Aba | Rota | O que faz |
 |---|---|---|
-| **Visao Geral** | `/` | Resumo do mes: gasto, fatura de parcelas, receitas e saldo; grafico dos ultimos 6 meses; gastos por categoria; transacoes recentes; status dos orcamentos |
-| **Transacoes** | `/transactions` | Registre gastos e receitas (valor, data, descricao, categoria, forma de pagamento, observacoes). Busca, filtros por categoria/tipo, edicao, exclusao e exportacao CSV |
-| **Orcamentos** | `/budgets` | Limite mensal por categoria com alerta de "perto do limite" (80%) e "acima do limite"; criar, renomear, recolorir e excluir categorias |
-| **Parcelas** | `/installments` | O Expense Viewer original, sem alteracoes de dados (paineis, parcelados, pontuais, historico, PIX, compartilhamento) |
+| **Visao Geral** | `/` | Resumo do mes: gasto, receitas, fatura de parcelas e saldo; despesas fixas pagas/pendentes; faturas dos cartoes; gastos maiores x menores com os maiores gastos; grafico de 6 meses; gastos por categoria; orcamentos |
+| **Transacoes** | `/transactions` | Registre gastos e receitas (valor, data, descricao, categoria, conta/cartao, forma de pagamento, observacoes). Busca, filtros por conta, maior/menor, categoria e tipo; edicao; exportacao CSV |
+| **Fixas** | `/recurring` | Despesas que se repetem todo mes (aluguel, internet, assinaturas, contas). Status pago / pendente / atrasado por mes; "Marcar pago" registra a transacao (com o valor real do mes) |
+| **Cartoes e Contas** | `/accounts` | Cartoes de credito com dia de fechamento, vencimento e limite: fatura do mes (compras apos o fechamento vao para a proxima fatura), uso do limite e principais compras. Contas bancarias e dinheiro com entradas/saidas |
+| **Orcamentos** | `/budgets` | Limite mensal por categoria; gerenciar categorias |
+| **Parcelas** | `/installments` | O Expense Viewer original, sem alteracoes de dados (paineis, parcelados, pontuais, historico, PIX, compartilhamento) + botao **Baixar backup** (JSON com todos os dados das parcelas) |
+
+Gasto "maior" = a partir de um valor que voce define na Visao Geral (padrao R$ 300).
 
 Todas as abas tem seletor de mes (`?month=AAAA-MM`). A fatura de parcelas de cada mes (vinda da aba Parcelas, ja descontando pagamentos PIX) entra no saldo da Visao Geral. Links antigos `/?dashboardId=...` redirecionam para `/installments?dashboardId=...`; links de compartilhamento continuam iguais.
 
 ### Migracao (obrigatoria uma vez)
 
-As novas abas usam tres tabelas novas (`categories`, `transactions`, `budgets`). Execute `supabase/migrations/001_spending_tracker.sql` no SQL Editor do Supabase. As tabelas existentes nao sao alteradas. Enquanto a migracao nao for executada, as novas abas mostram um aviso e a aba Parcelas continua funcionando normalmente. Na primeira visita, categorias padrao sao criadas automaticamente.
+As novas abas usam tabelas novas (`categories`, `accounts`, `recurring_expenses`, `transactions`, `budgets`, `finance_settings`). Execute `supabase/migrations/001_spending_tracker.sql` no SQL Editor do Supabase. As tabelas existentes nao sao alteradas. Enquanto a migracao nao for executada, as novas abas mostram um aviso e a aba Parcelas continua funcionando normalmente. Na primeira visita, categorias padrao sao criadas automaticamente.
 
 ## Funcionalidades da aba Parcelas
 

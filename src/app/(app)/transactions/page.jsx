@@ -11,7 +11,7 @@ export default async function TransactionsPage({ searchParams }) {
       <PageHeader titleKey="navTransactions">
         {result.ok && <MonthPicker month={result.month} />}
       </PageHeader>
-      {result.ok ? <TransactionsView month={result.month} categories={result.categories} transactions={result.transactions} /> : <LoadState result={result} />}
+      {result.ok ? <TransactionsView month={result.month} categories={result.categories} accounts={result.accounts} transactions={result.transactions} threshold={result.threshold} /> : <LoadState result={result} />}
     </>
   );
 }

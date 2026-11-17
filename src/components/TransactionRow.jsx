@@ -5,9 +5,10 @@ import { formatCurrency } from '@/utils/currency';
 import { useLocale } from './LocaleProvider';
 import CategoryDot from './CategoryDot';
 
-export default function TransactionRow({ tx, category, onEdit, onDelete, compact = false }) {
+export default function TransactionRow({ tx, category, account, threshold, onEdit, onDelete, compact = false }) {
   const { t, lang } = useLocale();
   const isIncome = tx.kind === 'income';
+  const isMajor = !isIncome && threshold != null && tx.amount >= threshold;
   const dateLabel = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' })
     .format(new Date(`${tx.date}T12:00:00`));
 
@@ -15,9 +16,13 @@ export default function TransactionRow({ tx, category, onEdit, onDelete, compact
     <li className="group flex items-center gap-3 py-3 px-1">
       <CategoryDot color={category?.color || 'gray'} size={12} />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate">{tx.description}</p>
+        <p className="text-sm font-medium text-slate-800 dark:text-slate-100 truncate flex items-center gap-2">
+          <span className="truncate">{tx.description}</span>
+          {isMajor && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-slate-800 text-white dark:bg-white dark:text-slate-900">{t('major')}</span>}
+          {tx.recurring_id && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">{t('navRecurring')}</span>}
+        </p>
         <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-          {category?.name || t('uncategorized')} · {t(`pm_${tx.payment_method}`)}{compact ? ` · ${dateLabel}` : ''}
+          {category?.name || t('uncategorized')} · {account ? account.name : t(`pm_${tx.payment_method}`)}{compact ? ` · ${dateLabel}` : ''}
           {tx.notes && !compact ? ` · ${tx.notes}` : ''}
         </p>
       </div>

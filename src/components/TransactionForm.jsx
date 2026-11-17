@@ -7,10 +7,10 @@ import { useLocale } from './LocaleProvider';
 import { input, label, primaryBtn } from './ui';
 import { todayISO } from '@/utils/month';
 
-export const PAYMENT_METHODS = ['pix', 'credit', 'debit', 'cash', 'transfer', 'other'];
+export const PAYMENT_METHODS = ['pix', 'credit', 'debit', 'cash', 'transfer', 'boleto', 'other'];
 
 // Modal form to add or edit a transaction.
-export default function TransactionForm({ categories, transaction, defaultDate, onClose }) {
+export default function TransactionForm({ categories, accounts = [], transaction, defaultDate, onClose }) {
   const { t } = useLocale();
   const editing = !!transaction?.id;
   const [form, setForm] = useState(() => ({
@@ -18,6 +18,7 @@ export default function TransactionForm({ categories, transaction, defaultDate, 
     amount: transaction ? String(transaction.amount).replace('.', ',') : '',
     description: transaction?.description || '',
     category_id: transaction?.category_id || '',
+    account_id: transaction?.account_id || '',
     date: transaction?.date || defaultDate || todayISO(),
     payment_method: transaction?.payment_method || 'pix',
     notes: transaction?.notes || '',
@@ -32,6 +33,15 @@ export default function TransactionForm({ categories, transaction, defaultDate, 
   }, [onClose]);
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setAccount = (e) => {
+    const id = e.target.value;
+    const acc = accounts.find((a) => a.id === id);
+    setForm((f) => ({
+      ...f,
+      account_id: id,
+      payment_method: acc?.type === 'credit_card' ? 'credit' : acc?.type === 'cash' ? 'cash' : f.payment_method === 'credit' ? 'pix' : f.payment_method,
+    }));
+  };
   const kindCategories = categories.filter((c) => c.kind === form.kind);
 
   const setKind = (kind) => setForm((f) => ({
@@ -45,7 +55,7 @@ export default function TransactionForm({ categories, transaction, defaultDate, 
     setSaving(true);
     setError('');
     try {
-      const payload = { ...form, category_id: form.category_id || null };
+      const payload = { ...form, category_id: form.category_id || null, account_id: form.account_id || null };
       if (editing) await updateTransaction(transaction.id, payload);
       else await addTransaction(payload);
       onClose();
@@ -101,6 +111,15 @@ export default function TransactionForm({ categories, transaction, defaultDate, 
               {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{t(`pm_${m}`)}</option>)}
             </select>
           </div>
+          {accounts.length > 0 && (
+            <div className="col-span-2">
+              <label className={label}>{t('account')}</label>
+              <select className={input} value={form.account_id} onChange={setAccount}>
+                <option value="">{t('noAccount')}</option>
+                {accounts.map((a) => <option key={a.id} value={a.id}>{a.name} · {t(`type_${a.type}`)}</option>)}
+              </select>
+            </div>
+          )}
           <div className="col-span-2">
             <label className={label}>{t('notes')}</label>
             <textarea className={input} rows={2} maxLength={1000} value={form.notes} onChange={set('notes')} />

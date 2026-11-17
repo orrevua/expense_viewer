@@ -3,15 +3,17 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, ArrowLeftRight, PiggyBank, CreditCard, LogOut, Moon, Sun, Loader2, Wallet } from 'lucide-react';
+import { LayoutDashboard, ArrowLeftRight, PiggyBank, CreditCard, LogOut, Moon, Sun, Loader2, Wallet, Repeat, Users } from 'lucide-react';
 import { logout } from '@/actions/auth';
 import { useLocale } from './LocaleProvider';
 
 const TABS = [
-  { href: '/', key: 'navOverview', icon: LayoutDashboard },
-  { href: '/transactions', key: 'navTransactions', icon: ArrowLeftRight },
-  { href: '/budgets', key: 'navBudgets', icon: PiggyBank },
-  { href: '/installments', key: 'navInstallments', icon: CreditCard },
+  { href: '/', key: 'navOverview', short: 'navShortOverview', icon: LayoutDashboard },
+  { href: '/transactions', key: 'navTransactions', short: 'navShortTransactions', icon: ArrowLeftRight },
+  { href: '/recurring', key: 'navRecurring', short: 'navShortRecurring', icon: Repeat },
+  { href: '/accounts', key: 'navAccounts', short: 'navShortAccounts', icon: CreditCard },
+  { href: '/budgets', key: 'navBudgets', short: 'navShortBudgets', icon: PiggyBank },
+  { href: '/installments', key: 'navInstallments', short: 'navShortInstallments', icon: Users },
 ];
 
 const iconBtn = 'border border-slate-200/60 dark:border-white/10 rounded-xl bg-white/80 dark:bg-white/10 hover:bg-white dark:hover:bg-white/20 backdrop-blur-sm transition-all';
@@ -31,28 +33,28 @@ export default function AppShell({ userName, children }) {
             <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-md shadow-violet-500/20">
               <Wallet className="w-5 h-5 text-white" />
             </span>
-            <span className="text-lg font-bold text-slate-800 dark:text-white hidden sm:block">{t('appName')}</span>
+            <span className="text-lg font-bold text-slate-800 dark:text-white hidden sm:block md:hidden xl:block">{t('appName')}</span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-1 ml-4">
+          <nav className="hidden md:flex items-center gap-0.5 ml-2 lg:ml-4">
             {TABS.map(({ href, key, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+                className={`flex items-center gap-2 px-2.5 lg:px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all ${
                   isActive(href)
                     ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/30'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-white/10'
                 }`}
               >
-                <Icon className="w-4 h-4" />
+                <Icon className="w-4 h-4 hidden xl:block" />
                 {t(key)}
               </Link>
             ))}
           </nav>
 
           <div className="ml-auto flex items-center gap-2">
-            {userName && <span className="hidden lg:block text-sm text-slate-500 dark:text-slate-400 mr-1">{userName}</span>}
+            {userName && <span className="hidden 2xl:block text-sm text-slate-500 dark:text-slate-400 mr-1">{userName}</span>}
             <button onClick={toggle} className={`px-2.5 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 ${iconBtn}`} title={lang === 'en' ? 'Mudar para Português' : 'Switch to English'}>
               {lang === 'en' ? 'EN' : 'PT'}
             </button>
@@ -72,17 +74,17 @@ export default function AppShell({ userName, children }) {
       </header>
 
       {/* Mobile bottom tab bar */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/90 dark:bg-[#120d1a]/95 backdrop-blur-md border-t border-slate-200/60 dark:border-white/10 grid grid-cols-4 pb-[env(safe-area-inset-bottom)]">
-        {TABS.map(({ href, key, icon: Icon }) => (
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/90 dark:bg-[#120d1a]/95 backdrop-blur-md border-t border-slate-200/60 dark:border-white/10 grid grid-cols-6 pb-[env(safe-area-inset-bottom)]">
+        {TABS.map(({ href, short, icon: Icon }) => (
           <Link
             key={href}
             href={href}
-            className={`flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium ${
+            className={`flex flex-col items-center gap-1 py-2.5 text-[10px] font-medium ${
               isActive(href) ? 'text-violet-600 dark:text-violet-400' : 'text-slate-500 dark:text-slate-400'
             }`}
           >
             <Icon className="w-5 h-5" />
-            {t(key)}
+            {t(short)}
           </Link>
         ))}
       </nav>
