@@ -5,7 +5,7 @@ import { X, Loader2 } from 'lucide-react';
 import { addTransaction, updateTransaction, errorMessage } from '@/lib/financeClient';
 import { useLocale } from './LocaleProvider';
 import { input, label, primaryBtn } from './ui';
-import { todayISO } from '@/utils/month';
+import { todayISO, TRACKING_START_DATE } from '@/utils/month';
 
 export const PAYMENT_METHODS = ['pix', 'credit', 'debit', 'cash', 'transfer', 'boleto', 'other'];
 
@@ -92,7 +92,7 @@ export default function TransactionForm({ categories, accounts = [], transaction
           </div>
           <div className="col-span-2 sm:col-span-1">
             <label className={label}>{t('date')}</label>
-            <input className={input} type="date" required value={form.date} onChange={set('date')} />
+            <input className={input} type="date" required min={TRACKING_START_DATE} value={form.date} onChange={set('date')} />
           </div>
           <div className="col-span-2">
             <label className={label}>{t('description')}</label>

@@ -9,7 +9,7 @@ import { useLocale } from './LocaleProvider';
 import Modal from './Modal';
 import CategoryDot from './CategoryDot';
 import StatusPill from './StatusPill';
-import { monthLabel } from '@/utils/month';
+import { monthLabel, TRACKING_START_DATE } from '@/utils/month';
 import { card, cardTitle, input, label, primaryBtn, ghostBtn } from './ui';
 
 const TYPE_ICON = { credit_card: CreditCard, bank: Landmark, cash: Wallet };
@@ -133,6 +133,7 @@ function CardBill({ bill, categories, incomes, onEdit }) {
     const m = v.trim().match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{4}))?$/);
     if (!m) return alert(t('invalidDate'));
     const iso = `${m[3] || now.getFullYear()}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    if (iso < TRACKING_START_DATE) return alert(t('beforeStart'));
     run(() => setCardBillPaid(c.id, month, true, iso));
   };
   const editAmount = () => {
