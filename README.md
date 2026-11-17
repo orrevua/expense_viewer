@@ -1,8 +1,23 @@
-# Expense Viewer
+# Money Tracker (Expense Viewer)
 
-Painel de financas pessoais para acompanhar despesas parceladas e pontuais com visualizacoes claras e controle total.
+App web de financas pessoais para acompanhar **todos os seus gastos**: transacoes do dia a dia, receitas, orcamentos por categoria e — na aba **Parcelas** — o Expense Viewer original com todos os seus dados de parcelamentos.
 
-## Funcionalidades
+## Abas
+
+| Aba | Rota | O que faz |
+|---|---|---|
+| **Visao Geral** | `/` | Resumo do mes: gasto, fatura de parcelas, receitas e saldo; grafico dos ultimos 6 meses; gastos por categoria; transacoes recentes; status dos orcamentos |
+| **Transacoes** | `/transactions` | Registre gastos e receitas (valor, data, descricao, categoria, forma de pagamento, observacoes). Busca, filtros por categoria/tipo, edicao, exclusao e exportacao CSV |
+| **Orcamentos** | `/budgets` | Limite mensal por categoria com alerta de "perto do limite" (80%) e "acima do limite"; criar, renomear, recolorir e excluir categorias |
+| **Parcelas** | `/installments` | O Expense Viewer original, sem alteracoes de dados (paineis, parcelados, pontuais, historico, PIX, compartilhamento) |
+
+Todas as abas tem seletor de mes (`?month=AAAA-MM`). A fatura de parcelas de cada mes (vinda da aba Parcelas, ja descontando pagamentos PIX) entra no saldo da Visao Geral. Links antigos `/?dashboardId=...` redirecionam para `/installments?dashboardId=...`; links de compartilhamento continuam iguais.
+
+### Migracao (obrigatoria uma vez)
+
+As novas abas usam tres tabelas novas (`categories`, `transactions`, `budgets`). Execute `supabase/migrations/001_spending_tracker.sql` no SQL Editor do Supabase. As tabelas existentes nao sao alteradas. Enquanto a migracao nao for executada, as novas abas mostram um aviso e a aba Parcelas continua funcionando normalmente. Na primeira visita, categorias padrao sao criadas automaticamente.
+
+## Funcionalidades da aba Parcelas
 
 - **Despesas Parceladas** — cadastre compras parceladas com valor total, quantidade de parcelas e mes de inicio. Acompanhe o progresso de pagamento com timeline visual por mes
 - **Despesas Pontuais** — registre gastos unicos e marque como pago/pendente de forma independente
@@ -96,6 +111,8 @@ CREATE TABLE monthly_history (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
+
+Depois execute tambem `supabase/migrations/001_spending_tracker.sql` (tabelas das abas Visao Geral, Transacoes e Orcamentos).
 
 ### 4. Executar
 

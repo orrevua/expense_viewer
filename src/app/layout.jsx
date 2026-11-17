@@ -2,18 +2,18 @@ import './globals.css';
 import { LocaleProvider } from '@/components/LocaleProvider';
 
 export const metadata = {
-  title: 'Expense Viewer',
-  description: 'Personal Finance Dashboard',
+  title: 'Money Tracker',
+  description: 'Track all your spending, income, budgets and installments',
   openGraph: {
     type: 'website',
-    title: 'Expense Viewer',
-    description: 'Personal Finance Dashboard',
+    title: 'Money Tracker',
+    description: 'Track all your spending, income, budgets and installments',
     images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Expense Viewer Dashboard' }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Expense Viewer',
-    description: 'Personal Finance Dashboard',
+    title: 'Money Tracker',
+    description: 'Track all your spending, income, budgets and installments',
     images: ['/og-image.png'],
   },
 };
