@@ -1,10 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { CreditCard, Repeat, PiggyBank, ShoppingBag, Users, ArrowDownLeft, CornerDownRight, Loader2 } from 'lucide-react';
-import { setCarryover, removeCarryover, errorMessage } from '@/lib/financeClient';
+import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
+import { CreditCard, Repeat, PiggyBank, ShoppingBag, Users, ArrowDownLeft, CornerDownRight, Loader2, Pencil, ArrowUpRight } from 'lucide-react';
+import { setCarryover, removeCarryover, markRecurringPaid, setCardBillAmount, errorMessage } from '@/lib/financeClient';
+import { toBR, parseBR } from '@/utils/dateInput';
+import TransactionForm from './TransactionForm';
 import { formatCurrency } from '@/utils/currency';
-import { monthLabel } from '@/utils/month';
+import { monthLabel, currentMonthKey, todayISO } from '@/utils/month';
 import { categoryColor } from '@/lib/palette';
 import { useLocale } from './LocaleProvider';
 import StatusPill from './StatusPill';
@@ -12,12 +15,16 @@ import { card, cardTitle } from './ui';
 
 const ICONS = { carry: CornerDownRight, income: ArrowDownLeft, fixed: Repeat, card: CreditCard, savings: PiggyBank, daily: ShoppingBag, installments: Users };
 
-export default function CashFlow({ flow }) {
+export default function CashFlow({ flow, categories = [], accounts = [] }) {
   const { t, lang, dark } = useLocale();
   const { events, totals } = flow;
   const fmt = (d) => new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' }).format(new Date(`${d}T12:00:00`));
 
   const [busy, setBusy] = useState(false);
+  const [editingTx, setEditingTx] = useState(null);
+  const closeTx = useCallback(() => setEditingTx(null), []);
+  const router = useRouter();
+  const monthQs = flow.month === currentMonthKey() ? '' : `?month=${flow.month}`;
   const monthName = (m) => monthLabel(m, lang, { month: 'long' }).toLocaleLowerCase(lang === 'en' ? 'en-US' : 'pt-BR');
   const run = async (fn) => {
     setBusy(true);
@@ -32,6 +39,33 @@ export default function CashFlow({ flow }) {
     if (!v.trim()) return run(() => removeCarryover(flow.month));
     run(() => setCarryover(flow.month, v));
   };
+  // Edit any line of the month so its leftover (and the next months') can be corrected.
+  const editEvent = (e) => {
+    if (e.type === 'carry') return adjustCarry(e);
+    if (e.type === 'daily') return router.push(`/transactions${monthQs}`);
+    if (e.type === 'installments') return router.push('/installments');
+    if (e.type === 'savings') return router.push('/savings');
+    if (e.tx) return setEditingTx(e.tx);
+    if (e.payment) return setEditingTx(e.payment);
+    if (e.type === 'card') {
+      const v = prompt(t('billAmountPrompt'), String(e.manualAmount ?? e.amount).replace('.', ','));
+      if (v === null) return;
+      return run(() => setCardBillAmount(e.cardId, e.billMonth, v.trim()));
+    }
+    if (e.recurringId) {
+      const isIn = e.kind === 'income';
+      const amount = prompt(t(isIn ? 'amountReceivedPrompt' : 'amountPaidPrompt'), String(e.expected).replace('.', ','));
+      if (amount === null) return;
+      const defDate = flow.month === currentMonthKey() ? todayISO() : e.dueDate;
+      const d = prompt(t(isIn ? 'dateReceivedPrompt' : 'datePaidPrompt'), toBR(defDate));
+      if (d === null) return;
+      const iso = parseBR(d, Number(flow.month.slice(0, 4)));
+      if (!iso || !iso.startsWith(flow.month)) return alert(t('dateInMonth'));
+      return run(() => markRecurringPaid(e.recurringId, flow.month, amount.trim() || e.expected, iso));
+    }
+  };
+  const editKind = (e) => (['daily', 'installments', 'savings'].includes(e.type) ? 'link' : 'edit');
+
   const label = (e) => {
     if (e.type === 'carry') return t(e.kind === 'income' ? 'carryIn' : 'carryShort', { month: monthName(e.refMonth) });
     if (e.type === 'savings') return t('flowSavings');
@@ -83,6 +117,11 @@ export default function CashFlow({ flow }) {
                   </p>
                 </div>
                 {['income', 'fixed', 'card', 'savings'].includes(e.type) && <span className="hidden sm:block"><StatusPill status={e.status} income={isIn} /></span>}
+                <button type="button" onClick={() => editEvent(e)} disabled={busy}
+                  className="p-1.5 -mr-1 rounded-lg text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:text-slate-500 dark:hover:text-violet-300 dark:hover:bg-white/10 shrink-0"
+                  title={t(editKind(e) === 'link' ? 'openTab' : 'editLine')} aria-label={t(editKind(e) === 'link' ? 'openTab' : 'editLine')}>
+                  {editKind(e) === 'link' ? <ArrowUpRight className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
+                </button>
                 <div className="text-right shrink-0">
                   <p className={`text-sm font-semibold tabular-nums ${isIn ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-800 dark:text-slate-100'}`}>
                     {isIn ? '+' : '−'} {formatCurrency(e.amount)}
@@ -104,6 +143,7 @@ export default function CashFlow({ flow }) {
           </span>
         </div>
       )}
+      {editingTx && <TransactionForm categories={categories} accounts={accounts} transaction={editingTx} onClose={closeTx} />}
     </div>
   );
 }

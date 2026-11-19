@@ -21,7 +21,8 @@ export default function TransactionRow({ tx, category, account, threshold, onEdi
           <span className="truncate">{tx.description}</span>
           {isMajor && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-slate-800 text-white dark:bg-white dark:text-slate-900">{t('major')}</span>}
           {tx.payment_method === 'carryover' && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-teal-100 text-teal-700 dark:bg-teal-500/20 dark:text-teal-300">{t('carryBadge')}</span>}
-          {tx.recurring_id && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">{t('navRecurring')}</span>}
+          {tx.duplicateOf && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300" title={t('duplicateHint', { name: tx.duplicateOf })}>{t('duplicateBadge')}</span>}
+          {(tx.recurring_id || tx.fixedName) && <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300">{t('navRecurring')}</span>}
         </p>
         <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
           {category?.name || t('uncategorized')} · {account ? account.name : t(`pm_${tx.payment_method}`)}{account?.type === 'credit_card' && account.closing_day ? ` · ${t('cardBill')} ${monthLabel(billDueMonth(tx.date, account.closing_day, account.due_day), lang, { month: 'short' }).replace('.', '')}` : ''}{compact ? ` · ${dateLabel}` : ''}

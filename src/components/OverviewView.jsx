@@ -13,6 +13,7 @@ import MajorMinorCard from './MajorMinorCard';
 import StatusPill from './StatusPill';
 import { RecurringSummary } from './RecurringView';
 import CashFlow, { IncomeCoverage } from './CashFlow';
+import DuplicatesNotice from './DuplicatesNotice';
 import { card, cardTitle } from './ui';
 
 function Stat({ icon: Icon, label, value, hint, href, accent }) {
@@ -57,8 +58,10 @@ export default function OverviewView({ data }) {
         <Stat icon={Scale} label={t('statLeft')} value={`${totals.left < 0 ? '−' : ''}${formatCurrency(Math.abs(totals.left))}`} hint={t('statLeftHint')} accent={totals.left < 0 ? 'border-l-red-500' : 'border-l-violet-500'} />
       </div>
 
+      <DuplicatesNotice duplicates={flow.duplicates || []} />
+
       <div className="grid lg:grid-cols-5 gap-6">
-        <div className="lg:col-span-3 min-w-0"><CashFlow flow={flow} /></div>
+        <div className="lg:col-span-3 min-w-0"><CashFlow flow={flow} categories={categories} accounts={data.accounts} /></div>
         <div className="lg:col-span-2 space-y-6 min-w-0">
           <IncomeCoverage coverage={flow.coverage} />
           <div className={`${card} p-5`}>
