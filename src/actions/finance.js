@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { getSessionUser } from '@/actions/auth';
 import { COLOR_KEYS } from '@/lib/palette';
 import { billFunding } from '@/lib/billing';
+import { matchMonth, findPaymentFor, findRecurringFor } from '@/lib/matching';
 import { monthRange, normalizeMonth, shiftMonth, toViewerMonth, isMonthKey, currentMonthKey, billDueMonth, billWindow, dueDate, todayISO, TRACKING_START, TRACKING_START_DATE } from '@/utils/month';
 
 const KINDS = ['expense', 'income'];
@@ -180,6 +181,13 @@ async function addTransactionImpl(input) {
   row.category_id = await assertCategory(user.id, input.category_id);
   row.account_id = await assertAccount(user.id, input.account_id);
   row.user_id = user.id;
+  // A transaction for a fixed item that is not paid yet this month (e.g. typing in the
+  // salary) is linked to it, so it counts as that item being received/paid, not twice.
+  const month = row.date.slice(0, 7);
+  const { start, end } = monthRange(month);
+  const [recurring, monthTx] = await Promise.all([loadRecurring(user.id), loadTransactions(user.id, start, end)]);
+  const fixed = findRecurringFor(row, recurring.filter((r) => (r.kind === 'income' ? !r.end_month || month <= r.end_month : activeIn(r, month))), monthTx);
+  if (fixed) row.recurring_id = fixed.id;
   const { error } = await supabase.from('transactions').insert([row]);
   check(error);
   revalidate();
@@ -378,8 +386,17 @@ async function createRecurringImpl(input) {
   row.account_id = await assertAccount(user.id, input.account_id);
   row.start_month = isMonthKey(input.start_month) ? input.start_month : currentMonthKey();
   row.user_id = user.id;
-  const { error } = await supabase.from('recurring_expenses').insert([row]);
+  const { data: created, error } = await supabase.from('recurring_expenses').insert([row]).select('*').single();
   check(error);
+  // If this month's payment was already typed in as a normal transaction, link it.
+  if (created) {
+    for (const m of [...new Set([row.start_month, currentMonthKey()])]) {
+      const { start, end } = monthRange(m);
+      const monthTx = await loadTransactions(user.id, start, end);
+      const tx = findPaymentFor({ ...created, amount: Number(created.amount) }, monthTx, m);
+      if (tx) await supabase.from('transactions').update({ recurring_id: created.id }).eq('id', tx.id).eq('user_id', user.id);
+    }
+  }
   revalidate();
 }
 
@@ -418,8 +435,16 @@ async function markRecurringPaidImpl(id, month, amountInput) {
   check(error);
   if (!r) throw new Error('Not found.');
   const { start, end } = monthRange(month);
-  const { data: existing } = await supabase.from('transactions').select('id').eq('user_id', user.id).eq('recurring_id', id).gte('date', start).lt('date', end);
-  if (existing && existing.length) return;
+  const monthTx = await loadTransactions(user.id, start, end);
+  if (monthTx.some((t) => t.recurring_id === id)) return;
+  // Already typed in as a normal transaction? Link it instead of creating a second one.
+  const existingTx = findPaymentFor({ ...r, amount: Number(r.amount) }, monthTx, month);
+  if (existingTx) {
+    const { error: linkError } = await supabase.from('transactions').update({ recurring_id: id }).eq('id', existingTx.id).eq('user_id', user.id);
+    check(linkError);
+    revalidate();
+    return;
+  }
   const amount = amountInput === undefined || amountInput === null || amountInput === '' ? Number(r.amount) : money(amountInput);
   if (!amount) throw new Error('Invalid amount.');
   const { error: insertError } = await supabase.from('transactions').insert([{
@@ -437,29 +462,51 @@ async function markRecurringPaidImpl(id, month, amountInput) {
   revalidate();
 }
 
-async function unmarkRecurringPaidImpl(id, month) {
+// Undo "paid/received": removes the transaction(s) that pay this item in `month`
+// (linked ones, and `paymentId` when it was matched automatically).
+async function unmarkRecurringPaidImpl(id, month, paymentId) {
   const user = await requireUser();
   if (!isMonthKey(month)) throw new Error('Invalid month.');
   const { start, end } = monthRange(month);
   const { error } = await supabase.from('transactions').delete().eq('user_id', user.id).eq('recurring_id', id).gte('date', start).lt('date', end);
   check(error);
+  if (paymentId) {
+    const { error: e2 } = await supabase.from('transactions').delete().eq('id', paymentId).eq('user_id', user.id).gte('date', start).lt('date', end);
+    check(e2);
+  }
   revalidate();
 }
 
-function recurringStatus(recurring, transactions, month) {
+// Fixed items of `month` with their status, plus which transactions pay them and which
+// ones look like duplicates (see src/lib/matching.js).
+function analyzeMonth(recurring, transactions, month) {
   const today = new Date();
   const thisMonth = currentMonthKey();
   // Fixed income also shows in months before it was registered (your salary existed before
   // you typed it in); fixed expenses start in the month they were added.
   const shows = (r) => (r.kind === 'income' ? !r.end_month || month <= r.end_month : activeIn(r, month));
-  return recurring.filter(shows).map((r) => {
-    const payment = transactions.find((t) => t.recurring_id === r.id && t.date.startsWith(month));
+  const visible = recurring.filter(shows);
+  const { payments, usedIds, duplicates } = matchMonth(visible, transactions, month);
+  const items = visible.map((r) => {
+    const p = payments.get(r.id);
     let status = 'pending';
-    if (payment) status = 'paid';
+    if (p) status = 'paid';
     // income that was not marked as received stays "expected", never "late"
     else if (r.kind !== 'income' && (month < thisMonth || (month === thisMonth && today.getDate() > r.due_day))) status = 'late';
-    return { ...r, status, paidAmount: payment?.amount ?? null, paymentId: payment?.id ?? null, dueDate: dueDate(month, r.due_day) };
+    return {
+      ...r, status,
+      paidAmount: p ? p.tx.amount : null,
+      paymentId: p ? p.tx.id : null,
+      paidDate: p ? p.tx.date : null,
+      autoMatched: !!p?.auto,
+      dueDate: dueDate(month, r.due_day),
+    };
   });
+  return { items, usedIds, duplicateIds: new Set(duplicates.map((d) => d.tx.id)), duplicates };
+}
+
+function recurringStatus(recurring, transactions, month) {
+  return analyzeMonth(recurring, transactions, month).items;
 }
 
 function summarizeRecurring(items) {
@@ -748,8 +795,15 @@ async function loadMonthModel(userId, month, { trendMonths = 1 } = {}) {
     .map((b) => ({ ...b, ...billFunding(b, recurring, todayISO()) }))
     .filter((b) => b.fundMonth === m);
 
+  const analysisCache = new Map();
+  const analysis = (m) => {
+    if (!analysisCache.has(m)) analysisCache.set(m, analyzeMonth(recurring, transactions, m));
+    return analysisCache.get(m);
+  };
+
   const monthTotals = (m) => {
-    const inM = transactions.filter((t) => t.date.startsWith(m));
+    const dup = analysis(m).duplicateIds;
+    const inM = transactions.filter((t) => t.date.startsWith(m) && !dup.has(t.id));
     const nonCard = inM.filter((t) => t.kind === 'expense' && !cardIds.has(t.account_id) && !isCarry(t));
     const bills = fundedBills(m);
     return {
@@ -762,12 +816,14 @@ async function loadMonthModel(userId, month, { trendMonths = 1 } = {}) {
   };
 
   const fundedMonthOf = (b) => billFunding(b, recurring, todayISO()).fundMonth;
-  return { months, categories, accounts, transactions, recurring, billsByMonth, fundedBills, fundedMonthOf, installmentBills, goals, entries, cardIds, monthTotals };
+  return { months, categories, accounts, transactions, recurring, billsByMonth, fundedBills, fundedMonthOf, installmentBills, goals, entries, cardIds, monthTotals, analysis };
 }
 
 function buildCashFlow(model, month, carryIn = 0) {
   const { recurring, transactions, billsByMonth, fundedBills, installmentBills, goals, entries, cardIds, accounts } = model;
-  const items = recurringStatus(recurring, transactions, month);
+  const { items, usedIds, duplicateIds, duplicates } = model.analysis(month);
+  // transactions already counted as a fixed item, or probable duplicates of one
+  const countedElsewhere = (t) => usedIds.has(t.id) || duplicateIds.has(t.id);
   const incomes = items.filter((i) => i.kind === 'income');
   const fixed = items.filter((i) => i.kind !== 'income');
   const bills = fundedBills(month);
@@ -775,15 +831,15 @@ function buildCashFlow(model, month, carryIn = 0) {
   const events = [];
 
   for (const i of incomes) {
-    events.push({ id: `r-${i.id}`, type: 'income', day: i.due_day, date: i.dueDate, label: i.name, amount: i.status === 'paid' ? i.paidAmount : i.amount, status: i.status, kind: 'income' });
+    events.push({ id: `r-${i.id}`, type: 'income', day: i.paidDate ? Number(i.paidDate.slice(8, 10)) : i.due_day, date: i.paidDate || i.dueDate, label: i.name, amount: i.status === 'paid' ? i.paidAmount : i.amount, status: i.status, kind: 'income' });
   }
-  for (const t of inM.filter((x) => x.kind === 'income' && !x.recurring_id && !isCarry(x))) {
+  for (const t of inM.filter((x) => x.kind === 'income' && !countedElsewhere(x) && !isCarry(x))) {
     events.push({ id: `t-${t.id}`, type: 'income', day: Number(t.date.slice(8, 10)), date: t.date, label: t.description, amount: t.amount, status: 'paid', kind: 'income' });
   }
   for (const f of fixed) {
     const onCard = f.account_id && cardIds.has(f.account_id);
     if (onCard) continue; // shows up inside the card bill
-    events.push({ id: `r-${f.id}`, type: 'fixed', day: f.due_day, date: f.dueDate, label: f.name, amount: f.status === 'paid' ? f.paidAmount : f.amount, status: f.status, kind: 'expense' });
+    events.push({ id: `r-${f.id}`, type: 'fixed', day: f.paidDate ? Number(f.paidDate.slice(8, 10)) : f.due_day, date: f.paidDate || f.dueDate, label: f.name, amount: f.status === 'paid' ? f.paidAmount : f.amount, status: f.status, kind: 'expense' });
   }
   for (const b of bills) {
     if (!b.total && b.status !== 'paid') continue;
@@ -796,7 +852,7 @@ function buildCashFlow(model, month, carryIn = 0) {
     const firstIncomeDay = incomes.length ? Math.min(...incomes.map((i) => i.due_day)) : 1;
     events.push({ id: 'savings', type: 'savings', day: firstIncomeDay, date: dueDate(month, firstIncomeDay), label: 'savings', amount: Math.max(planned, savedThisMonth), done: savedThisMonth, planned, status: savedThisMonth >= planned && planned > 0 ? 'paid' : 'pending', kind: 'expense' });
   }
-  const daily = sum(inM.filter((t) => t.kind === 'expense' && !t.recurring_id && !cardIds.has(t.account_id) && !isCarry(t)));
+  const daily = sum(inM.filter((t) => t.kind === 'expense' && !t.recurring_id && !countedElsewhere(t) && !cardIds.has(t.account_id) && !isCarry(t)));
   if (daily > 0) events.push({ id: 'daily', type: 'daily', day: 32, label: 'daily', amount: daily, status: 'paid', kind: 'expense' });
   // Leftover from the previous month: the confirmed one (a saved transaction) or the calculated one.
   const savedCarry = inM.find(isCarry);
@@ -830,10 +886,10 @@ function buildCashFlow(model, month, carryIn = 0) {
       .map((b) => ({ card: b.card, total: b.total, status: b.status, dueDate: b.dueDate, payDate: b.payDate, predicted: b.predicted }));
     const amount = inc.status === 'paid' ? inc.paidAmount : inc.amount;
     const billsTotal = round2(linked.reduce((a, l) => a + l.total, 0));
-    return { income: inc, amount, date: inc.dueDate, bills: linked, billsTotal, left: round2(amount - billsTotal) };
+    return { income: inc, amount, date: inc.paidDate || inc.dueDate, bills: linked, billsTotal, left: round2(amount - billsTotal) };
   });
 
-  return { month, events, carry: carry || null, totals: { in: totalIn, out: totalOut, savings: totalSavings, left: round2(totalIn - totalOut - totalSavings) }, coverage, recurringItems: items };
+  return { month, events, carry: carry || null, duplicates: duplicates.map((d) => ({ id: d.tx.id, description: d.tx.description, amount: d.tx.amount, date: d.tx.date, kind: d.tx.kind, of: d.of.name, originalDate: d.original.date })), totals: { in: totalIn, out: totalOut, savings: totalSavings, left: round2(totalIn - totalOut - totalSavings) }, coverage, recurringItems: items };
 }
 
 // First month you have anything in the tracker (transactions, fixed items, card bills,
@@ -915,12 +971,18 @@ export async function getTransactionsData(monthParam) {
     const user = await requireUser();
     const month = normalizeMonth(monthParam);
     const { start, end } = monthRange(month);
-    const [categories, accounts, transactions, threshold] = await Promise.all([
+    const [categories, accounts, rawTransactions, threshold, recurring] = await Promise.all([
       loadCategories(user.id),
       loadAccounts(user.id),
       loadTransactions(user.id, start, end),
       loadThreshold(user.id),
+      loadRecurring(user.id),
     ]);
+    // mark which transactions pay a fixed item and which look like duplicates
+    const { items, duplicates } = analyzeMonth(recurring, rawTransactions, month);
+    const paidBy = new Map(items.filter((i) => i.paymentId).map((i) => [i.paymentId, i.name]));
+    const dupOf = new Map(duplicates.map((d) => [d.tx.id, d.of.name]));
+    const transactions = rawTransactions.map((t) => ({ ...t, fixedName: paidBy.get(t.id) || null, duplicateOf: dupOf.get(t.id) || null }));
     return { month, categories, accounts, transactions, threshold };
   });
 }

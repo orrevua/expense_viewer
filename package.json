@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node scripts/test-billing.mjs"
+    "test": "node scripts/test-billing.mjs && node scripts/test-matching.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

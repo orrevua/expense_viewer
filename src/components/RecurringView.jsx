@@ -131,7 +131,10 @@ function RecurringRow({ item, month, category, account, onEdit }) {
       <div className="w-24 flex justify-end"><StatusPill status={item.status} income={isIncome} /></div>
       <div className="flex items-center gap-1 ml-auto sm:ml-0">
         {item.status === 'paid' ? (
-          <button className={`${ghostBtn} py-1.5`} disabled={busy} onClick={() => run(() => unmarkRecurringPaid(item.id, month))}>
+          <button className={`${ghostBtn} py-1.5`} disabled={busy} onClick={() => {
+            if (!confirm(t('confirmUndoPaid', { name: item.name, amount: formatCurrency(item.paidAmount), date: fmtDay.format(new Date(`${item.paidDate}T12:00:00`)) }))) return;
+            run(() => unmarkRecurringPaid(item.id, month, item.paymentId));
+          }}>
             {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />}{t('undoPaid')}
           </button>
         ) : (
