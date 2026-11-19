@@ -10,6 +10,7 @@ import StatusPill from './StatusPill';
 import CategoryDot from './CategoryDot';
 import { PAYMENT_METHODS } from './TransactionForm';
 import { card, cardTitle, input, label, primaryBtn, ghostBtn } from './ui';
+import { TRACKING_START } from '@/utils/month';
 
 function RecurringForm({ item, kind: defaultKind, month, categories, accounts, onClose }) {
   const { t } = useLocale();
@@ -21,6 +22,7 @@ function RecurringForm({ item, kind: defaultKind, month, categories, accounts, o
     category_id: item?.category_id || '',
     account_id: item?.account_id || '',
     payment_method: item?.payment_method || 'pix',
+    start_month: item?.start_month || month,
   });
   const [saving, setSaving] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -30,7 +32,7 @@ function RecurringForm({ item, kind: defaultKind, month, categories, accounts, o
     e.preventDefault();
     setSaving(true);
     try {
-      const payload = { ...form, category_id: form.category_id || null, account_id: form.account_id || null, start_month: month };
+      const payload = { ...form, category_id: form.category_id || null, account_id: form.account_id || null };
       if (item) await updateRecurring(item.id, payload);
       else await createRecurring(payload);
       onClose();
@@ -76,6 +78,14 @@ function RecurringForm({ item, kind: defaultKind, month, categories, accounts, o
             <select className={input} value={form.payment_method} onChange={set('payment_method')}>
               {PAYMENT_METHODS.map((m) => <option key={m} value={m}>{t(`pm_${m}`)}</option>)}
             </select>
+          </div>
+        )}
+        {!isIncome && (
+          <div className="col-span-2">
+            <label className={label}>{t('recurringStart')}</label>
+            <input className={input} type="month" required min={TRACKING_START} max={item?.end_month || undefined}
+              value={form.start_month} onChange={set('start_month')} />
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">{t('recurringStartHint')}</p>
           </div>
         )}
         {accounts.length > 0 && (

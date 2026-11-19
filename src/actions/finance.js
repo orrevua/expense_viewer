@@ -371,12 +371,18 @@ function cleanRecurring(input) {
   };
 }
 
+// Month a fixed item starts counting: a valid YYYY-MM, never before the tracker starts.
+function startMonthOf(value, fallback) {
+  const m = isMonthKey(value) ? value : fallback;
+  return m && m < TRACKING_START ? TRACKING_START : m;
+}
+
 async function createRecurringImpl(input) {
   const user = await requireUser();
   const row = cleanRecurring(input);
   row.category_id = await assertCategory(user.id, input.category_id);
   row.account_id = await assertAccount(user.id, input.account_id);
-  row.start_month = isMonthKey(input.start_month) ? input.start_month : currentMonthKey();
+  row.start_month = startMonthOf(input.start_month, currentMonthKey());
   row.user_id = user.id;
   const { error } = await supabase.from('recurring_expenses').insert([row]);
   check(error);
@@ -388,6 +394,14 @@ async function updateRecurringImpl(id, input) {
   const row = cleanRecurring(input);
   row.category_id = await assertCategory(user.id, input.category_id);
   row.account_id = await assertAccount(user.id, input.account_id);
+  if (isMonthKey(input.start_month)) {
+    const { data: current, error: readError } = await supabase.from('recurring_expenses').select('end_month').eq('id', id).eq('user_id', user.id).maybeSingle();
+    check(readError);
+    if (!current) throw new Error('Not found.');
+    const start = startMonthOf(input.start_month);
+    if (current.end_month && start > current.end_month) throw new Error('Start month is after the end month.');
+    row.start_month = start;
+  }
   const { error } = await supabase.from('recurring_expenses').update(row).eq('id', id).eq('user_id', user.id);
   check(error);
   revalidate();
