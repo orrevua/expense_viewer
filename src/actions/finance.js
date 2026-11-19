@@ -428,7 +428,7 @@ async function deleteRecurringImpl(id) {
 }
 
 // Marking as paid records a real transaction, so it shows up everywhere else.
-async function markRecurringPaidImpl(id, month, amountInput) {
+async function markRecurringPaidImpl(id, month, amountInput, dateInput) {
   const user = await requireUser();
   if (!isMonthKey(month)) throw new Error('Invalid month.');
   const { data: r, error } = await supabase.from('recurring_expenses').select('*').eq('id', id).eq('user_id', user.id).maybeSingle();
@@ -447,6 +447,9 @@ async function markRecurringPaidImpl(id, month, amountInput) {
   }
   const amount = amountInput === undefined || amountInput === null || amountInput === '' ? Number(r.amount) : money(amountInput);
   if (!amount) throw new Error('Invalid amount.');
+  // the day it was really paid/received (must be inside `month`), default the due day
+  const date = isoDate(dateInput) && dateInput.startsWith(month) ? dateInput : dueDate(month, r.due_day);
+  if (date < TRACKING_START_DATE) throw new Error('Date before the start of the tracker (October 2026).');
   const { error: insertError } = await supabase.from('transactions').insert([{
     user_id: user.id,
     kind: r.kind || 'expense',
@@ -456,7 +459,7 @@ async function markRecurringPaidImpl(id, month, amountInput) {
     account_id: r.account_id,
     recurring_id: r.id,
     payment_method: r.payment_method,
-    date: dueDate(month, r.due_day),
+    date,
   }]);
   check(insertError);
   revalidate();
@@ -498,6 +501,7 @@ function analyzeMonth(recurring, transactions, month) {
       paidAmount: p ? p.tx.amount : null,
       paymentId: p ? p.tx.id : null,
       paidDate: p ? p.tx.date : null,
+      payment: p ? p.tx : null,
       autoMatched: !!p?.auto,
       dueDate: dueDate(month, r.due_day),
     };
@@ -831,20 +835,20 @@ function buildCashFlow(model, month, carryIn = 0) {
   const events = [];
 
   for (const i of incomes) {
-    events.push({ id: `r-${i.id}`, type: 'income', day: i.paidDate ? Number(i.paidDate.slice(8, 10)) : i.due_day, date: i.paidDate || i.dueDate, label: i.name, amount: i.status === 'paid' ? i.paidAmount : i.amount, status: i.status, kind: 'income' });
+    events.push({ id: `r-${i.id}`, type: 'income', day: i.paidDate ? Number(i.paidDate.slice(8, 10)) : i.due_day, date: i.paidDate || i.dueDate, label: i.name, amount: i.status === 'paid' ? i.paidAmount : i.amount, status: i.status, kind: 'income', recurringId: i.id, payment: i.payment, expected: i.amount, dueDate: i.dueDate });
   }
   for (const t of inM.filter((x) => x.kind === 'income' && !countedElsewhere(x) && !isCarry(x))) {
-    events.push({ id: `t-${t.id}`, type: 'income', day: Number(t.date.slice(8, 10)), date: t.date, label: t.description, amount: t.amount, status: 'paid', kind: 'income' });
+    events.push({ id: `t-${t.id}`, type: 'income', day: Number(t.date.slice(8, 10)), date: t.date, label: t.description, amount: t.amount, status: 'paid', kind: 'income', tx: t });
   }
   for (const f of fixed) {
     const onCard = f.account_id && cardIds.has(f.account_id);
     if (onCard) continue; // shows up inside the card bill
-    events.push({ id: `r-${f.id}`, type: 'fixed', day: f.paidDate ? Number(f.paidDate.slice(8, 10)) : f.due_day, date: f.paidDate || f.dueDate, label: f.name, amount: f.status === 'paid' ? f.paidAmount : f.amount, status: f.status, kind: 'expense' });
+    events.push({ id: `r-${f.id}`, type: 'fixed', day: f.paidDate ? Number(f.paidDate.slice(8, 10)) : f.due_day, date: f.paidDate || f.dueDate, label: f.name, amount: f.status === 'paid' ? f.paidAmount : f.amount, status: f.status, kind: 'expense', recurringId: f.id, payment: f.payment, expected: f.amount, dueDate: f.dueDate });
   }
   for (const b of bills) {
     if (!b.total && b.status !== 'paid') continue;
     const payWith = recurring.find((r) => r.id === b.card.pay_with_id);
-    events.push({ id: `c-${b.card.id}-${b.month}`, type: 'card', day: b.fundDay, date: b.payDate, dueDate: b.dueDate, payDate: b.payDate, paidAt: b.paidAt, predicted: b.predicted, fundedEarly: b.fundedEarly, label: b.card.name, amount: b.total, status: b.status, kind: 'expense', payWith: payWith?.name || null, color: b.card.color });
+    events.push({ id: `c-${b.card.id}-${b.month}`, type: 'card', day: b.fundDay, date: b.payDate, dueDate: b.dueDate, payDate: b.payDate, paidAt: b.paidAt, predicted: b.predicted, fundedEarly: b.fundedEarly, label: b.card.name, amount: b.total, status: b.status, kind: 'expense', payWith: payWith?.name || null, color: b.card.color, cardId: b.card.id, billMonth: b.month, manualAmount: b.manualAmount });
   }
   const planned = round2(goals.reduce((a, g) => a + g.monthly_amount, 0));
   const savedThisMonth = round2(entries.filter((e) => e.date.startsWith(month)).reduce((a, e) => a + e.amount, 0));

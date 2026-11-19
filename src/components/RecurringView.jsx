@@ -8,7 +8,9 @@ import { useLocale } from './LocaleProvider';
 import Modal from './Modal';
 import StatusPill from './StatusPill';
 import CategoryDot from './CategoryDot';
-import { PAYMENT_METHODS } from './TransactionForm';
+import TransactionForm, { PAYMENT_METHODS } from './TransactionForm';
+import { toBR, parseBR } from '@/utils/dateInput';
+import { currentMonthKey, todayISO } from '@/utils/month';
 import { card, cardTitle, input, label, primaryBtn, ghostBtn } from './ui';
 
 function RecurringForm({ item, kind: defaultKind, month, categories, accounts, onClose }) {
@@ -95,7 +97,7 @@ function RecurringForm({ item, kind: defaultKind, month, categories, accounts, o
   );
 }
 
-function RecurringRow({ item, month, category, account, onEdit }) {
+function RecurringRow({ item, month, category, account, onEdit, onEditPayment }) {
   const { t, lang } = useLocale();
   const [busy, setBusy] = useState(false);
   const fmtDay = new Intl.DateTimeFormat(lang === 'en' ? 'en-US' : 'pt-BR', { day: '2-digit', month: 'short' });
@@ -109,7 +111,11 @@ function RecurringRow({ item, month, category, account, onEdit }) {
   const pay = () => {
     const value = prompt(t(isIncome ? 'amountReceivedPrompt' : 'amountPaidPrompt'), String(item.amount).replace('.', ','));
     if (value === null) return;
-    run(() => markRecurringPaid(item.id, month, value.trim() || item.amount));
+    const d = prompt(t(isIncome ? 'dateReceivedPrompt' : 'datePaidPrompt'), toBR(month === currentMonthKey() ? todayISO() : item.dueDate));
+    if (d === null) return;
+    const iso = parseBR(d, Number(month.slice(0, 4)));
+    if (!iso || !iso.startsWith(month)) return alert(t('dateInMonth'));
+    run(() => markRecurringPaid(item.id, month, value.trim() || item.amount, iso));
   };
 
   const iconBtn = 'p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10 disabled:opacity-40';
@@ -130,6 +136,9 @@ function RecurringRow({ item, month, category, account, onEdit }) {
       </div>
       <div className="w-24 flex justify-end"><StatusPill status={item.status} income={isIncome} /></div>
       <div className="flex items-center gap-1 ml-auto sm:ml-0">
+        {item.status === 'paid' && item.payment && (
+          <button className={iconBtn} onClick={() => onEditPayment(item.payment)} title={t('editPayment')} aria-label={t('editPayment')}><Pencil className="w-4 h-4 text-violet-500" /></button>
+        )}
         {item.status === 'paid' ? (
           <button className={`${ghostBtn} py-1.5`} disabled={busy} onClick={() => {
             if (!confirm(t('confirmUndoPaid', { name: item.name, amount: formatCurrency(item.paidAmount), date: fmtDay.format(new Date(`${item.paidDate}T12:00:00`)) }))) return;
@@ -174,7 +183,7 @@ export function RecurringSummary({ summary }) {
   );
 }
 
-function Section({ title, hint, empty, items, month, catById, accById, onEdit }) {
+function Section({ title, hint, empty, items, month, catById, accById, onEdit, onEditPayment }) {
   const order = { late: 0, pending: 1, paid: 2 };
   const sorted = [...items].sort((a, b) => a.due_day - b.due_day || order[a.status] - order[b.status]);
   return (
@@ -189,7 +198,7 @@ function Section({ title, hint, empty, items, month, catById, accById, onEdit })
       ) : (
         <ul className="divide-y divide-slate-100 dark:divide-white/5">
           {sorted.map((item) => (
-            <RecurringRow key={item.id} item={item} month={month} category={catById[item.category_id]} account={accById[item.account_id]} onEdit={onEdit} />
+            <RecurringRow key={item.id} item={item} month={month} category={catById[item.category_id]} account={accById[item.account_id]} onEdit={onEdit} onEditPayment={onEditPayment} />
           ))}
         </ul>
       )}
@@ -200,12 +209,15 @@ function Section({ title, hint, empty, items, month, catById, accById, onEdit })
 export default function RecurringView({ month, items, incomes = [], summary, incomeSummary, categories, accounts }) {
   const { t } = useLocale();
   const [editing, setEditing] = useState(null);
+  const [editingPayment, setEditingPayment] = useState(null);
   const close = useCallback(() => setEditing(null), []);
+  const closePayment = useCallback(() => setEditingPayment(null), []);
   const catById = Object.fromEntries(categories.map((c) => [c.id, c]));
   const accById = Object.fromEntries(accounts.map((a) => [a.id, a]));
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
+      {editingPayment && <TransactionForm categories={categories} accounts={accounts} transaction={editingPayment} onClose={closePayment} />}
       <div className="space-y-6 lg:order-2">
         <div className={`${card} p-5`}>
           <h3 className={`${cardTitle} mb-3`}>{t('incomeTotal')}</h3>
@@ -223,8 +235,8 @@ export default function RecurringView({ month, items, incomes = [], summary, inc
       </div>
 
       <div className="space-y-6 lg:col-span-2 lg:order-1">
-        <Section title={t('fixedIncomeTitle')} hint={t('fixedIncomeHint')} empty={t('noFixedIncome')} items={incomes} month={month} catById={catById} accById={accById} onEdit={setEditing} />
-        <Section title={t('recurringTitle')} hint={t('recurringHint')} empty={t('noRecurring')} items={items} month={month} catById={catById} accById={accById} onEdit={setEditing} />
+        <Section title={t('fixedIncomeTitle')} hint={t('fixedIncomeHint')} empty={t('noFixedIncome')} items={incomes} month={month} catById={catById} accById={accById} onEdit={setEditing} onEditPayment={setEditingPayment} />
+        <Section title={t('recurringTitle')} hint={t('recurringHint')} empty={t('noRecurring')} items={items} month={month} catById={catById} accById={accById} onEdit={setEditing} onEditPayment={setEditingPayment} />
       </div>
 
       {editing && <RecurringForm item={editing.id ? editing : null} kind={editing.kind} month={month} categories={categories} accounts={accounts} onClose={close} />}

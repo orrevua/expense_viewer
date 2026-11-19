@@ -61,7 +61,7 @@ export default function OverviewView({ data }) {
       <DuplicatesNotice duplicates={flow.duplicates || []} />
 
       <div className="grid lg:grid-cols-5 gap-6">
-        <div className="lg:col-span-3 min-w-0"><CashFlow flow={flow} /></div>
+        <div className="lg:col-span-3 min-w-0"><CashFlow flow={flow} categories={categories} accounts={data.accounts} /></div>
         <div className="lg:col-span-2 space-y-6 min-w-0">
           <IncomeCoverage coverage={flow.coverage} />
           <div className={`${card} p-5`}>
